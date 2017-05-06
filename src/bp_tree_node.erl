@@ -7,7 +7,7 @@
 %%% @doc
 %%% @end
 %%%-------------------------------------------------------------------
--module(bp_tree).
+-module(bp_tree_node).
 -author("Krzysztof Trzepla").
 
 -include("bp_tree.hrl").
@@ -15,13 +15,10 @@
 %% API exports
 -export([]).
 
--type tree() :: #bp_tree{}.
--type tree_node() :: #bp_tree_node{}.
--type option() :: {degree, pos_integer()} |
-                  {store_module, module()} |
-                  {store_args, bp_tree_store:args()}.
+-type id() :: binary().
+-type children() :: any().
 
--export_type([tree/0, tree_node/0, option/0]).
+-export_type([id/0, children/0]).
 
 %%====================================================================
 %% API functions

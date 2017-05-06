@@ -12,13 +12,16 @@
 -define(BP_TREE_HRL, 1).
 
 -record(bp_tree, {
-    degree,
-    root
+    degree :: pos_integer(),
+    root :: bp_tree_node:id(),
+    store_module :: module(),
+    store_state :: bp_tree_store:state()
 }).
 
--record(bp_node, {
-    leaf,
-    children
+-record(bp_tree_node, {
+    leaf :: boolean(),
+    parent :: undefined | bp_tree_node:id(),
+    children :: bp_tree_node:children()
 }).
 
 -endif.
