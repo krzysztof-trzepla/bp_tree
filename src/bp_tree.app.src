@@ -1,0 +1,15 @@
+{application, bp_tree, [
+    {description, "An OTP library"},
+    {vsn, "1.0.0"},
+    {registered, []},
+    {applications,
+        [kernel,
+            stdlib
+        ]},
+    {env, []},
+    {modules, []},
+
+    {maintainers, []},
+    {licenses, []},
+    {links, []}
+]}.
