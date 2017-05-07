@@ -33,13 +33,12 @@
     {{ok, id(), bp_tree:tree_node()} | {error, term()}, bp_tree:tree()}.
 new_leaf(Tree = #bp_tree{
     order = Order,
-    root_id = RootId,
     store_module = Module,
     store_state = State
 }) ->
     Node = #bp_tree_node{
         leaf = true,
-        parent_id = RootId,
+        last = undefined,
         children = bp_tree_map:new(2 * Order)
     },
     case Module:create_node(Node, State) of

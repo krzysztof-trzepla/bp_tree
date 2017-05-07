@@ -20,7 +20,6 @@
 
 -record(bp_tree_node, {
     leaf :: boolean(),
-    parent_id :: undefined | bp_tree_node:id(),
     last :: undefined | bp_tree_node:id() | bp_tree:value(),
     children :: bp_tree_node:children()
 }).

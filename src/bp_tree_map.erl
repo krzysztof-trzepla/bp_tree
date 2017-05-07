@@ -12,10 +12,10 @@
 
 %% API exports
 -export([new/1]).
--export([insert/3]).
--export([at/2, find/2, lower_bound/2]).
+-export([insert/3, erase/2]).
+-export([at/2, first/1, last/1, find/2, lower_bound/2, upper_bound/2]).
 -export([size/1]).
--export([to_list/1, from_list/2]).
+-export([to_list/1, from_list/1, from_list/2]).
 
 -record(map, {
     size :: non_neg_integer(),
@@ -74,12 +74,46 @@ insert(Key, Value, Map = #map{size = Size, data = Data}) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
+-spec erase(key(), ordered_map()) ->
+    {ok, ordered_map()} | {error, empty | not_found}.
+erase(_Key, #map{size = 0}) ->
+    {error, empty};
+erase(Key, Map = #map{}) ->
+    Pos = lower_bound(Key, Map),
+    case at(Pos, Map) of
+        {ok, {Key, _Value}} -> {ok, shift_left(Pos, Map)};
+        _ -> {error, not_found}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
 -spec at(pos_integer(), ordered_map()) ->
     {ok, {key(), value()}} | {error, out_of_range}.
 at(Pos, #map{size = Size, data = Data}) when 1 =< Pos andalso Pos =< Size ->
     {ok, erlang:element(Pos, Data)};
 at(_Pos, #map{}) ->
     {error, out_of_range}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec first(ordered_map()) -> {ok, {key(), value()}} | {error, out_of_range}.
+first(Map = #map{}) ->
+    at(1, Map).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec last(ordered_map()) -> {ok, {key(), value()}} | {error, out_of_range}.
+last(Map = #map{size = Size}) ->
+    at(Size, Map).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -108,6 +142,15 @@ lower_bound(Key, Map = #map{size = Size}) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
+-spec upper_bound(key(), ordered_map()) -> non_neg_integer().
+upper_bound(Key, Map = #map{size = Size}) ->
+    upper_bound(Key, 1, Size, Map).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
 -spec size(ordered_map()) -> non_neg_integer().
 size(#map{size = Size}) ->
     Size.
@@ -122,6 +165,14 @@ to_list(#map{size = Size, data = Data}) ->
     lists:map(fun(Pos) ->
         erlang:element(Pos, Data)
     end, lists:seq(1, Size)).
+
+%%--------------------------------------------------------------------
+%% @equiv from_list(List, erlang:length(List))
+%% @end
+%%--------------------------------------------------------------------
+-spec from_list([{bp_tree:key(), bp_tree:value()}]) -> ordered_map().
+from_list(List) ->
+    from_list(List, erlang:length(List)).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -168,9 +219,40 @@ lower_bound(_Key, Lower, _Upper, _Map) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
+-spec upper_bound(key(), pos_integer(), pos_integer(), ordered_map()) ->
+    pos_integer().
+upper_bound(Key, Lower, Upper, Map) when Lower =< Upper ->
+    Mid = (Lower + Upper) div 2,
+    {ok, {MidKey, _MidValue}} = at(Mid, Map),
+    if
+        MidKey =< Key -> upper_bound(Key, Mid + 1, Upper, Map);
+        true -> upper_bound(Key, Lower, Mid - 1, Map)
+    end;
+upper_bound(_Key, Lower, _Upper, _Map) ->
+    Lower.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
 -spec shift_right(pos_integer(), ordered_map()) -> ordered_map().
 shift_right(StartPos, Map = #map{size = Size, data = Data}) ->
     Data3 = lists:foldl(fun(Pos, Data2) ->
         erlang:setelement(Pos, Data2, erlang:element(Pos - 1, Data2))
     end, Data, lists:seq(Size + 1, StartPos + 1, -1)),
     Map#map{size = Size + 1, data = Data3}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec shift_left(pos_integer(), ordered_map()) -> ordered_map().
+shift_left(StartPos, Map = #map{size = Size, data = Data}) ->
+    Data3 = lists:foldl(fun(Pos, Data2) ->
+        erlang:setelement(Pos, Data2, erlang:element(Pos + 1, Data2))
+    end, Data, lists:seq(StartPos, Size - 1)),
+    Map#map{size = Size - 1, data = erlang:setelement(Size, Data3, undefined)}.
