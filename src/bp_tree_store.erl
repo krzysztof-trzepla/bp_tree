@@ -27,10 +27,13 @@
 -callback get_root(state()) ->
     {{ok, bp_tree_node:id()} | {error, Reason :: term()}, state()}.
 
+-callback create_node(bp_tree:tree_node(), state()) ->
+    {{ok, bp_tree_node:id()} | {error, Reason :: term()}, state()}.
+
 -callback get_node(bp_tree_node:id(), state()) ->
     {{ok, bp_tree:tree_node()} | {error, Reason :: term()}, state()}.
 
--callback save_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
+-callback update_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
     {ok | {error, Reason :: term()}, state()}.
 
 -callback delete_node(bp_tree_node:id(), state()) ->

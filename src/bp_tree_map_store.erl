@@ -14,9 +14,11 @@
 
 %% bp_tree_store callbacks
 -export([init/1, terminate/1]).
--export([set_root/2, get_root/1, get_node/2, save_node/3, delete_node/2]).
+-export([set_root/2, get_root/1]).
+-export([create_node/2, get_node/2, update_node/3, delete_node/2]).
 
 -type state() :: maps:map([{'$root', bp_tree_node:id()} |
+                           {'$next_node_id', bp_tree_node:id()} |
                            {bp_tree_node:id(), bp_tree:node()}]).
 
 %%====================================================================
@@ -30,7 +32,7 @@
 %%--------------------------------------------------------------------
 -spec init(bp_tree_store:args()) -> state().
 init(_Args) ->
-    #{}.
+    #{'$next_node_id' => 1}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -60,6 +62,18 @@ get_root(State) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
+-spec create_node(bp_tree:tree_node(), state()) ->
+    {{ok, bp_tree_node:id()} | {error, Reason :: term()}, state()}.
+create_node(Node, State) ->
+    NodeId = maps:get('$next_node_id', State),
+    State2 = maps:put('$next_node_id', NodeId + 1, State),
+    {{ok, NodeId}, maps:put(NodeId, Node, State2)}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
 -spec get_node(bp_tree_node:id(), state()) ->
     {{ok, bp_tree:tree_node()} | {error, Reason :: term()}, state()}.
 get_node(NodeId, State) ->
@@ -73,10 +87,13 @@ get_node(NodeId, State) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
--spec save_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
+-spec update_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
     {ok | {error, Reason :: term()}, state()}.
-save_node(NodeId, Node, State) ->
-    {ok, maps:put(NodeId, Node, State)}.
+update_node(NodeId, Node, State) ->
+    case maps:find(NodeId, State) of
+        {ok, _} -> {ok, maps:put(NodeId, Node, State)};
+        error -> {{error, not_found}, State}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -86,7 +103,10 @@ save_node(NodeId, Node, State) ->
 -spec delete_node(bp_tree_node:id(), state()) ->
     {ok | {error, Reason :: term()}, state()}.
 delete_node(NodeId, State) ->
-    {ok, maps:remove(NodeId, State)}.
+    case maps:find(NodeId, State) of
+        {ok, _} -> {ok, maps:remove(NodeId, State)};
+        error -> {{error, not_found}, State}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc

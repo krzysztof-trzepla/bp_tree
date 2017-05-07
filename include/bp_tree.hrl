@@ -13,14 +13,14 @@
 
 -record(bp_tree, {
     degree :: pos_integer(),
-    root :: bp_tree_node:id(),
+    root_id :: undefined | bp_tree_node:id(),
     store_module :: module(),
     store_state :: bp_tree_store:state()
 }).
 
 -record(bp_tree_node, {
     leaf :: boolean(),
-    parent :: undefined | bp_tree_node:id(),
+    parent_id :: undefined | bp_tree_node:id(),
     children :: bp_tree_node:children()
 }).
 

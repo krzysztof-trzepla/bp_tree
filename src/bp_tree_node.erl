@@ -15,7 +15,7 @@
 %% API exports
 -export([]).
 
--type id() :: binary().
+-type id() :: any().
 -type children() :: any().
 
 -export_type([id/0, children/0]).
