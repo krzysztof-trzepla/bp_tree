@@ -29,12 +29,28 @@
 %% API functions
 %%====================================================================
 
+%%--------------------------------------------------------------------
+%% @equiv new(undefined)
+%% @end
+%%--------------------------------------------------------------------
+-spec new() -> tree().
 new() ->
     new(undefined).
 
+%%--------------------------------------------------------------------
+%% @equiv new(RootId, [])
+%% @end
+%%--------------------------------------------------------------------
+-spec new(undefined | bp_tree_node:id()) -> tree().
 new(RootId) ->
     new(RootId, []).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec new(undefined | bp_tree_node:id(), [option()]) -> tree().
 new(RootId, Opts) ->
     Degree = proplists:get_value(degree, Opts, 100),
     Module = proplists:get_value(store_module, Opts, bp_tree_map_store),

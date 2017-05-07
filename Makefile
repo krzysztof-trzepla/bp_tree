@@ -24,3 +24,7 @@ test:
 .PHONY: cover
 cover:
 	./rebar3 cover
+
+.PHONY: doc
+doc:
+	./rebar3 edoc
