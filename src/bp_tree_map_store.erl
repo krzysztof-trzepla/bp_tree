@@ -40,7 +40,7 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_root(bp_tree_node:id(), state()) ->
-    {ok | {error, Reason :: term()}, state()}.
+    {ok | {error, term()}, state()}.
 set_root(NodeId, State) ->
     {ok, maps:put('$root', NodeId, State)}.
 
@@ -50,7 +50,7 @@ set_root(NodeId, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_root(state()) ->
-    {{ok, bp_tree_node:id()} | {error, Reason :: term()}, state()}.
+    {{ok, bp_tree_node:id()} | {error, term()}, state()}.
 get_root(State) ->
     case maps:find('$root', State) of
         {ok, NodeId} -> {{ok, NodeId}, State};
@@ -63,7 +63,7 @@ get_root(State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_node(bp_tree:tree_node(), state()) ->
-    {{ok, bp_tree_node:id()} | {error, Reason :: term()}, state()}.
+    {{ok, bp_tree_node:id()} | {error, term()}, state()}.
 create_node(Node, State) ->
     NodeId = maps:get('$next_node_id', State),
     State2 = maps:put('$next_node_id', NodeId + 1, State),
@@ -75,7 +75,7 @@ create_node(Node, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_node(bp_tree_node:id(), state()) ->
-    {{ok, bp_tree:tree_node()} | {error, Reason :: term()}, state()}.
+    {{ok, bp_tree:tree_node()} | {error, term()}, state()}.
 get_node(NodeId, State) ->
     case maps:find(NodeId, State) of
         {ok, Node} -> {{ok, Node}, State};
@@ -88,7 +88,7 @@ get_node(NodeId, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
-    {ok | {error, Reason :: term()}, state()}.
+    {ok | {error, term()}, state()}.
 update_node(NodeId, Node, State) ->
     case maps:find(NodeId, State) of
         {ok, _} -> {ok, maps:put(NodeId, Node, State)};
@@ -101,7 +101,7 @@ update_node(NodeId, Node, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_node(bp_tree_node:id(), state()) ->
-    {ok | {error, Reason :: term()}, state()}.
+    {ok | {error, term()}, state()}.
 delete_node(NodeId, State) ->
     case maps:find(NodeId, State) of
         {ok, _} -> {ok, maps:remove(NodeId, State)};

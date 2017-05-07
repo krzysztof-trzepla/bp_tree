@@ -19,7 +19,7 @@
 -type value() :: term().
 -type tree() :: #bp_tree{}.
 -type tree_node() :: #bp_tree_node{}.
--type option() :: {degree, pos_integer()} |
+-type option() :: {order, pos_integer()} |
                   {store_module, module()} |
                   {store_args, bp_tree_store:args()}.
 
@@ -52,11 +52,11 @@ new(RootId) ->
 %%--------------------------------------------------------------------
 -spec new(undefined | bp_tree_node:id(), [option()]) -> tree().
 new(RootId, Opts) ->
-    Degree = proplists:get_value(degree, Opts, 100),
+    Order = proplists:get_value(order, Opts, 50),
     Module = proplists:get_value(store_module, Opts, bp_tree_map_store),
     Args = proplists:get_value(store_args, Opts, []),
     #bp_tree{
-        degree = Degree,
+        order = Order,
         root_id = RootId,
         store_module = Module,
         store_state = Module:init(Args)
