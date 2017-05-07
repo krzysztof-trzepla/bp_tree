@@ -13,7 +13,7 @@
 -include("bp_tree.hrl").
 
 %% API exports
--export([new_leaf/1]).
+-export([new_leaf/1, find/2]).
 
 -type id() :: any().
 -type children() :: bp_tree_map:ordered_map().
@@ -46,6 +46,24 @@ new_leaf(Tree = #bp_tree{
             {{ok, NodeId, Node}, Tree#bp_tree{store_state = State2}};
         {{error, Reason}, State2} ->
             {{error, Reason}, Tree#bp_tree{store_state = State2}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec find(bp_tree:key(), bp_tree:tree_node()) ->
+    {ok, bp_tree:value()} | {next, id()} | {error, term()}.
+find(Key, #bp_tree_node{leaf = true, children = Children}) ->
+    bp_tree_map:find(Key, Children);
+find(Key, #bp_tree_node{leaf = false, last = Last, children = Children}) ->
+    Pos = bp_tree_map:upper_bound(Key, Children),
+    case bp_tree_map:at(Pos, Children) of
+        {ok, {_, NodeId}} ->
+            {next, NodeId};
+        {error, out_of_range} ->
+            {next, Last}
     end.
 
 %%====================================================================

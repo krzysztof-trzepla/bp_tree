@@ -16,16 +16,8 @@
 new_should_use_defaults_test() ->
     ?assertMatch(#bp_tree{
         order = 50,
-        root_id = undefined,
         store_module = bp_tree_map_store
     }, bp_tree:new()).
-
-new_should_set_root_id_test() ->
-    ?assertMatch(#bp_tree{
-        order = 50,
-        root_id = 1,
-        store_module = bp_tree_map_store
-    }, bp_tree:new(1)).
 
 new_should_use_custom_options_test_() ->
     StoreModule = some_module,
@@ -43,10 +35,9 @@ new_should_use_custom_options_test_() ->
         end,
         ?_assertEqual(#bp_tree{
             order = 32,
-            root_id = 2,
             store_module = StoreModule,
             store_state = state
-        }, bp_tree:new(2, [
+        }, bp_tree:new([
             {order, 32},
             {store_module, StoreModule},
             {store_args, StoreArgs}
