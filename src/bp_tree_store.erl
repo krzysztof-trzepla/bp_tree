@@ -21,10 +21,10 @@
 
 -callback init(args()) -> state().
 
--callback set_root(bp_tree_node:id(), state()) ->
+-callback set_root_id(bp_tree_node:id(), state()) ->
     {ok | {error, term()}, state()}.
 
--callback get_root(state()) ->
+-callback get_root_id(state()) ->
     {{ok, bp_tree_node:id()} | {error, term()}, state()}.
 
 -callback create_node(bp_tree:tree_node(), state()) ->

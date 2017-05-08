@@ -31,14 +31,15 @@ bp_tree_map_store_test_() ->
     }.
 
 set_root_should_succeed(State) ->
-    ?_assertMatch({ok, _}, bp_tree_map_store:set_root(1, State)).
+    ?_assertMatch({ok, _}, bp_tree_map_store:set_root_id(1, State)).
 
 get_root_should_succeed(State) ->
-    {ok, State2} = bp_tree_map_store:set_root(1, State),
-    ?_assertMatch({{ok, 1}, _}, bp_tree_map_store:get_root(State2)).
+    {ok, State2} = bp_tree_map_store:set_root_id(1, State),
+    ?_assertMatch({{ok, 1}, _}, bp_tree_map_store:get_root_id(State2)).
 
 get_root_should_return_missing_error(State) ->
-    ?_assertMatch({{error, not_found}, _}, bp_tree_map_store:get_root(State)).
+    ?_assertMatch({{error, not_found}, _},
+        bp_tree_map_store:get_root_id(State)).
 
 create_root_should_succeed(State) ->
     ?_assertMatch({{ok, _}, _}, bp_tree_map_store:create_node(node, State)).

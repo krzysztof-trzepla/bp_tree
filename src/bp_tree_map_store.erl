@@ -14,7 +14,7 @@
 
 %% bp_tree_store callbacks
 -export([init/1, terminate/1]).
--export([set_root/2, get_root/1]).
+-export([set_root_id/2, get_root_id/1]).
 -export([create_node/2, get_node/2, update_node/3, delete_node/2]).
 
 -type state() :: maps:map([{'$root', bp_tree_node:id()} |
@@ -39,9 +39,9 @@ init(_Args) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
--spec set_root(bp_tree_node:id(), state()) ->
+-spec set_root_id(bp_tree_node:id(), state()) ->
     {ok | {error, term()}, state()}.
-set_root(NodeId, State) ->
+set_root_id(NodeId, State) ->
     {ok, maps:put('$root', NodeId, State)}.
 
 %%--------------------------------------------------------------------
@@ -49,9 +49,9 @@ set_root(NodeId, State) ->
 %% @todo write me!
 %% @end
 %%--------------------------------------------------------------------
--spec get_root(state()) ->
+-spec get_root_id(state()) ->
     {{ok, bp_tree_node:id()} | {error, term()}, state()}.
-get_root(State) ->
+get_root_id(State) ->
     case maps:find('$root', State) of
         {ok, NodeId} -> {{ok, NodeId}, State};
         error -> {{error, not_found}, State}

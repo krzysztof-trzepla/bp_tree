@@ -91,7 +91,24 @@ find(Key, RootId, Tree = #bp_tree{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec insert(key(), value(), tree()) -> {ok | {error, term()}, tree()}.
-insert(_Key, _Value, Tree = #bp_tree{}) ->
+insert(Key, Value, Tree = #bp_tree{}) ->
+    case get_root_id(Tree) of
+        {{ok, RootId}, Tree2} ->
+            insert(Key, Value, RootId, Tree2);
+        {{error, not_found}, Tree2} ->
+            create_and_insert(Key, Value, Tree2);
+        {{error, Reason}, Tree2} ->
+            {{error, Reason}, Tree2}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec insert(key(), value(), bp_tree_node:id(), tree()) ->
+    {ok | {error, term()}, tree()}.
+insert(_Key, _Value, _RootId, Tree = #bp_tree{}) ->
     {{error, not_implemented}, Tree}.
 
 %%--------------------------------------------------------------------
@@ -116,7 +133,7 @@ erase(_Key, Tree = #bp_tree{}) ->
 -spec get_root_id(tree()) ->
     {{ok, bp_tree_node:id()} | {error, term()}, tree()}.
 get_root_id(Tree = #bp_tree{store_module = Module, store_state = State}) ->
-    case Module:get_root(State) of
+    case Module:get_root_id(State) of
         {{ok, RootId}, State2} ->
             {{ok, RootId}, Tree#bp_tree{store_state = State2}};
         {{error, Reason}, State2} ->
@@ -124,6 +141,25 @@ get_root_id(Tree = #bp_tree{store_module = Module, store_state = State}) ->
     end.
 
 %%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec set_root_id(bp_tree_node:id(), tree()) -> {ok | {error, term()}, tree()}.
+set_root_id(RootId, Tree = #bp_tree{
+    store_module = Module,
+    store_state = State
+}) ->
+    case Module:set_root_id(RootId, State) of
+        {ok, State2} ->
+            {ok, Tree#bp_tree{store_state = State2}};
+        {{error, Reason}, State2} ->
+            {{error, Reason}, Tree#bp_tree{store_state = State2}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% @todo write me!
 %% @end
@@ -136,4 +172,23 @@ get_node(NodeId, Tree = #bp_tree{store_module = Module, store_state = State}) ->
             {{ok, Node}, Tree#bp_tree{store_state = State2}};
         {{error, Reason}, State2} ->
             {{error, Reason}, Tree#bp_tree{store_state = State2}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec create_and_insert(key(), value(), tree()) ->
+    {ok | {error, term()}, tree()}.
+create_and_insert(Key, Value, Tree) ->
+    case bp_tree_node:new(Tree, []) of
+        {{ok, NodeId}, Tree2} ->
+            case set_root_id(NodeId, Tree2) of
+                {ok, Tree3} -> insert(Key, Value, Tree3);
+                {{error, Reason}, Tree3} -> {{error, Reason}, Tree3}
+            end;
+        {{error, Reason}, Tree2} ->
+            {{error, Reason}, Tree2}
     end.
