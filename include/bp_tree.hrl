@@ -12,15 +12,14 @@
 -define(BP_TREE_HRL, 1).
 
 -record(bp_tree, {
-    order :: pos_integer(),
+    order :: bp_tree:order(),
     store_module :: module(),
     store_state :: bp_tree_store:state()
 }).
 
 -record(bp_tree_node, {
     leaf :: boolean(),
-    last :: undefined | bp_tree_node:id() | bp_tree:value(),
-    children :: bp_tree_node:children()
+    children :: bp_tree_array:array()
 }).
 
 -endif.

@@ -8,7 +8,7 @@
 %%% This module provides B+ tree store with Erlang map as a backend.
 %%% @end
 %%%-------------------------------------------------------------------
--module(bp_tree_map_store).
+-module(bp_tree_ets_store).
 -author("Krzysztof Trzepla").
 
 -behaviour(bp_tree_store).
@@ -21,7 +21,7 @@
 -record(state, {
     root_id :: undefined | bp_tree_node:id(),
     next_node_id = 1 :: pos_integer(),
-    map :: maps:map([{bp_tree_node:id(), bp_tree:node()}])
+    table_id :: ets:tid()
 }).
 
 -type state() :: #state{}.
@@ -37,7 +37,7 @@
 %%--------------------------------------------------------------------
 -spec init(bp_tree_store:args()) -> {ok, state()}.
 init(_Args) ->
-    {ok, #state{map = #{}}}.
+    {ok, #state{table_id = ets:new(store, [public])}}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -70,13 +70,11 @@ get_root_id(State = #state{root_id = RootId}) ->
     {{ok, bp_tree_node:id()} | {error, term()}, state()}.
 create_node(Node, State = #state{
     next_node_id = NextNodeId,
-    map = Map
+    table_id = TableId
 }) ->
     NodeId = integer_to_binary(NextNodeId),
-    {{ok, NodeId}, State#state{
-        next_node_id = NextNodeId + 1,
-        map = maps:put(NodeId, Node, Map)
-    }}.
+    ets:insert(TableId, {NodeId, Node}),
+    {{ok, NodeId}, State#state{next_node_id = NextNodeId + 1}}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -85,10 +83,10 @@ create_node(Node, State = #state{
 %%--------------------------------------------------------------------
 -spec get_node(bp_tree_node:id(), state()) ->
     {{ok, bp_tree:tree_node()} | {error, term()}, state()}.
-get_node(NodeId, State = #state{map = Map}) ->
-    case maps:find(NodeId, Map) of
-        {ok, Node} -> {{ok, Node}, State};
-        error -> {{error, not_found}, State}
+get_node(NodeId, State = #state{table_id = TableId}) ->
+    case ets:lookup(TableId, NodeId) of
+        [{NodeId, Node}] -> {{ok, Node}, State};
+        [] -> {{error, not_found}, State}
     end.
 
 %%--------------------------------------------------------------------
@@ -98,10 +96,13 @@ get_node(NodeId, State = #state{map = Map}) ->
 %%--------------------------------------------------------------------
 -spec update_node(bp_tree_node:id(), bp_tree:tree_node(), state()) ->
     {ok | {error, term()}, state()}.
-update_node(NodeId, Node, State = #state{map = Map}) ->
-    case maps:find(NodeId, Map) of
-        {ok, _} -> {ok, State#state{map = maps:put(NodeId, Node, Map)}};
-        error -> {{error, not_found}, State}
+update_node(NodeId, Node, State  = #state{table_id = TableId}) ->
+    case ets:lookup(TableId, NodeId) of
+        [{NodeId, _}] ->
+            ets:insert(TableId, {NodeId, Node}),
+            {ok, State};
+        [] ->
+            {{error, not_found}, State}
     end.
 
 %%--------------------------------------------------------------------
@@ -111,10 +112,13 @@ update_node(NodeId, Node, State = #state{map = Map}) ->
 %%--------------------------------------------------------------------
 -spec delete_node(bp_tree_node:id(), state()) ->
     {ok | {error, term()}, state()}.
-delete_node(NodeId, State = #state{map = Map}) ->
-    case maps:find(NodeId, Map) of
-        {ok, _} -> {ok, State#state{map = maps:remove(NodeId, Map)}};
-        error -> {{error, not_found}, State}
+delete_node(NodeId, State = #state{table_id = TableId}) ->
+    case ets:lookup(TableId, NodeId) of
+        [{NodeId, _}] ->
+            ets:delete(TableId, NodeId),
+            {ok, State};
+        [] ->
+            {{error, not_found}, State}
     end.
 
 %%--------------------------------------------------------------------
@@ -123,5 +127,6 @@ delete_node(NodeId, State = #state{map = Map}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(state()) -> ok.
-terminate(_State) ->
+terminate(#state{table_id = TableId}) ->
+    ets:delete(TableId),
     ok.

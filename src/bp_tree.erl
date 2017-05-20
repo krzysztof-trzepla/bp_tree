@@ -5,6 +5,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This module provides an API for a B+ tree.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(bp_tree).
@@ -14,111 +15,96 @@
 
 %% API exports
 -export([new/0, new/1]).
--export([find/2, insert/3, erase/2]).
+-export([find/2, insert/3]).
 
 -type key() :: term().
 -type value() :: term().
 -type tree() :: #bp_tree{}.
 -type tree_node() :: #bp_tree_node{}.
--type option() :: {order, pos_integer()} |
+-type order() :: pos_integer().
+-type option() :: {order, order()} |
                   {store_module, module()} |
                   {store_args, bp_tree_store:args()}.
+-type path() :: [{bp_tree_node:id(), tree_node()}].
+-type error() :: {error, Reason :: term()}.
+-type error_stacktrace() :: {error, Reason :: term(), [erlang:stack_item()]}.
 
--export_type([key/0, value/0, tree/0, tree_node/0, option/0]).
+-export_type([key/0, value/0, tree/0, tree_node/0, order/0, option/0]).
 
 %%====================================================================
 %% API functions
 %%====================================================================
 
 %%--------------------------------------------------------------------
-%% @equiv new(undefined)
+%% @equiv new([])
 %% @end
 %%--------------------------------------------------------------------
--spec new() -> tree().
+-spec new() -> {ok, tree()} | error().
 new() ->
     new([]).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @todo write me!
+%% Creates new B+ tree.
 %% @end
 %%--------------------------------------------------------------------
--spec new([option()]) -> tree().
+-spec new([option()]) -> {ok, tree()} | error().
 new(Opts) ->
     Order = proplists:get_value(order, Opts, 50),
     Module = proplists:get_value(store_module, Opts, bp_tree_map_store),
     Args = proplists:get_value(store_args, Opts, []),
-    #bp_tree{
-        order = Order,
-        store_module = Module,
-        store_state = Module:init(Args)
-    }.
+    case Module:init(Args) of
+        {ok, State} ->
+            {ok, #bp_tree{
+                order = Order,
+                store_module = Module,
+                store_state = State
+            }};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @todo write me!
+%% Returns a value associated with a key from a B+ tree.
 %% @end
 %%--------------------------------------------------------------------
--spec find(key(), tree()) -> {{ok, value()} | {error, term()}, tree()}.
+-spec find(key(), tree()) ->
+    {{ok, value()} | error() | error_stacktrace(), tree()}.
 find(Key, Tree = #bp_tree{}) ->
-    case get_root_id(Tree) of
-        {{ok, RootId}, Tree2} -> find(Key, RootId, Tree2);
-        {{error, Reason}, Tree2} -> {{error, Reason}, Tree2}
+    try
+        {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+        {[{_, Leaf} | _], Tree3} = find_path(Key, RootId, Tree2),
+        {bp_tree_node:find(Key, Leaf), Tree3}
+    catch
+        _:{badmatch, Reason} -> {{error, Reason}, Tree};
+        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
     end.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @todo write me!
+%% Inserts a key-value pair into a B+ tree.
 %% @end
 %%--------------------------------------------------------------------
--spec find(key(), bp_tree_node:id(), tree()) ->
-    {{ok, value()} | {error, term()}, tree()}.
-find(Key, RootId, Tree = #bp_tree{}) ->
-    case get_node(RootId, Tree) of
-        {{ok, Node}, Tree2} ->
-            case bp_tree_node:find(Key, Node) of
-                {ok, Value} -> {{ok, Value}, Tree2};
-                {next, NodeId} -> find(Key, NodeId, Tree2);
-                {error, Reason} -> {{error, Reason}, Tree2}
-            end;
-        {{error, Reason}, Tree2} ->
-            {{error, Reason}, Tree2}
+-spec insert(key(), value(), tree()) ->
+    {ok | error() | error_stacktrace(), tree()}.
+insert(Key, Value, Tree = #bp_tree{order = Order}) ->
+    try
+        case bp_tree_store:get_root_id(Tree) of
+            {{ok, RootId}, Tree2} ->
+                {Path, Tree3} = find_path(Key, RootId, Tree2),
+                insert(Key, {Value, undefined}, Path, Tree3);
+            {{error, not_found}, Tree2} ->
+                Root = bp_tree_node:new(Order, true),
+                {{ok, RootId}, Tree3} = bp_tree_store:create_node(Root, Tree2),
+                {ok, Tree4} = bp_tree_store:set_root_id(RootId, Tree3),
+                {Path, Tree5} = find_path(Key, RootId, Tree4),
+                insert(Key, {Value, undefined}, Path, Tree5)
+        end
+    catch
+        _:{badmatch, Reason} -> {{error, Reason}, Tree};
+        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
     end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @todo write me!
-%% @end
-%%--------------------------------------------------------------------
--spec insert(key(), value(), tree()) -> {ok | {error, term()}, tree()}.
-insert(Key, Value, Tree = #bp_tree{}) ->
-    case get_root_id(Tree) of
-        {{ok, RootId}, Tree2} ->
-            insert(Key, Value, RootId, Tree2);
-        {{error, not_found}, Tree2} ->
-            create_and_insert(Key, Value, Tree2);
-        {{error, Reason}, Tree2} ->
-            {{error, Reason}, Tree2}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @todo write me!
-%% @end
-%%--------------------------------------------------------------------
--spec insert(key(), value(), bp_tree_node:id(), tree()) ->
-    {ok | {error, term()}, tree()}.
-insert(_Key, _Value, _RootId, Tree = #bp_tree{}) ->
-    {{error, not_implemented}, Tree}.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @todo write me!
-%% @end
-%%--------------------------------------------------------------------
--spec erase(key(), tree()) -> {ok | {error, term()}, tree()}.
-erase(_Key, Tree = #bp_tree{}) ->
-    {{error, not_implemented}, Tree}.
 
 %%====================================================================
 %% Internal functions
@@ -126,69 +112,51 @@ erase(_Key, Tree = #bp_tree{}) ->
 
 %%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% @todo write me!
+%% @equiv find_path(Key, NodeId, Tree, [])
 %% @end
 %%--------------------------------------------------------------------
--spec get_root_id(tree()) ->
-    {{ok, bp_tree_node:id()} | {error, term()}, tree()}.
-get_root_id(Tree = #bp_tree{store_module = Module, store_state = State}) ->
-    case Module:get_root_id(State) of
-        {{ok, RootId}, State2} ->
-            {{ok, RootId}, Tree#bp_tree{store_state = State2}};
-        {{error, Reason}, State2} ->
-            {{error, Reason}, Tree#bp_tree{store_state = State2}}
+-spec find_path(key(), bp_tree_node:id(), tree()) -> {path(), tree()}.
+find_path(Key, NodeId, Tree) ->
+    find_path(Key, NodeId, Tree, []).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns leaf-root path for a given key.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_path(key(), bp_tree_node:id(), tree(), path()) -> {path(), tree()}.
+find_path(Key, NodeId, Tree, Path) ->
+    {{ok, Node}, Tree2} = bp_tree_store:get_node(NodeId, Tree),
+    Path2 = [{NodeId, Node} | Path],
+    case bp_tree_node:next(Key, Node) of
+        {ok, NodeId2} -> find_path(Key, NodeId2, Tree2, Path2);
+        {error, not_found} -> {Path2, Tree2}
     end.
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% @todo write me!
+%% Inserts a key-value pair into a B+ tree along the provided leaf-root path.
+%% Stops when insert does not cause node split, otherwise inserts new key-value
+%% pair into next node on path.
 %% @end
 %%--------------------------------------------------------------------
--spec set_root_id(bp_tree_node:id(), tree()) -> {ok | {error, term()}, tree()}.
-set_root_id(RootId, Tree = #bp_tree{
-    store_module = Module,
-    store_state = State
-}) ->
-    case Module:set_root_id(RootId, State) of
-        {ok, State2} ->
-            {ok, Tree#bp_tree{store_state = State2}};
-        {{error, Reason}, State2} ->
-            {{error, Reason}, Tree#bp_tree{store_state = State2}}
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% @todo write me!
-%% @end
-%%--------------------------------------------------------------------
--spec get_node(bp_tree_node:id(), tree()) ->
-    {{ok, tree_node()} | {error, term()}, tree()}.
-get_node(NodeId, Tree = #bp_tree{store_module = Module, store_state = State}) ->
-    case Module:get_node(NodeId, State) of
-        {{ok, Node}, State2} ->
-            {{ok, Node}, Tree#bp_tree{store_state = State2}};
-        {{error, Reason}, State2} ->
-            {{error, Reason}, Tree#bp_tree{store_state = State2}}
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% @todo write me!
-%% @end
-%%--------------------------------------------------------------------
--spec create_and_insert(key(), value(), tree()) ->
-    {ok | {error, term()}, tree()}.
-create_and_insert(Key, Value, Tree) ->
-    case bp_tree_node:new(Tree, []) of
-        {{ok, NodeId}, Tree2} ->
-            case set_root_id(NodeId, Tree2) of
-                {ok, Tree3} -> insert(Key, Value, Tree3);
-                {{error, Reason}, Tree3} -> {{error, Reason}, Tree3}
-            end;
-        {{error, Reason}, Tree2} ->
-            {{error, Reason}, Tree2}
+-spec insert(key(), value(), path(), tree()) -> {ok | error(), tree()}.
+insert(Key, Value, [], Tree = #bp_tree{order = Order}) ->
+    Root = bp_tree_node:new(Order, false),
+    {ok, Root2} = bp_tree_node:insert(Key, Value, Root),
+    {{ok, RootId}, Tree2} = bp_tree_store:create_node(Root2, Tree),
+    bp_tree_store:set_root_id(RootId, Tree2);
+insert(Key, Value, [{NodeId, Node} | Path], Tree) ->
+    case bp_tree_node:insert(Key, Value, Node) of
+        {ok, Node2} ->
+            bp_tree_store:update_node(NodeId, Node2, Tree);
+        {ok, LNode, Key2, RNode} ->
+            {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
+            LNode2 = bp_tree_node:set_next(RNodeId, LNode),
+            {ok, Tree3} = bp_tree_store:update_node(NodeId, LNode2, Tree2),
+            insert(Key2, {NodeId, RNodeId}, Path, Tree3);
+        {error, Reason} ->
+            {error, Reason}
     end.
