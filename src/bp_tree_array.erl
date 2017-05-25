@@ -96,7 +96,11 @@ left(Pos, Array = #bp_tree_array{}) ->
 %%--------------------------------------------------------------------
 -spec right(pos_integer(), array()) -> {ok, value()} | {error, out_of_range}.
 right(Pos, Array = #bp_tree_array{}) ->
-    at(Pos, 1, Array).
+    case at(Pos, 1, Array) of
+        {ok, ?NIL} -> {error, out_of_range};
+        {ok, Value} -> {ok, Value};
+        {error, Reason} -> {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
