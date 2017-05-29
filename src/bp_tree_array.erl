@@ -19,9 +19,10 @@
 %% API exports
 -export([new/1, size/1, full/1]).
 -export([key/2, left/2, right/2]).
--export([update_left/3, update_right/3]).
+-export([update_key/3, update_left/3, update_right/3]).
 -export([find/2, lower_bound/2]).
--export([insert/3, append/3, erase/2, split/1]).
+-export([insert/3, append/3, prepend/3, split/1, merge/2]).
+-export([remove_left/2, remove_right/2]).
 -export([to_list/1, from_list/1]).
 
 -record(bp_tree_array, {
@@ -94,13 +95,25 @@ left(Pos, Array = #bp_tree_array{}) ->
 %% Returns right value at given position.
 %% @end
 %%--------------------------------------------------------------------
--spec right(pos_integer(), array()) -> {ok, value()} | {error, out_of_range}.
+-spec right(non_neg_integer(), array()) -> {ok, value()} | {error, out_of_range}.
+right(0, #bp_tree_array{data = Data}) ->
+    {ok, erlang:element(1, Data)};
 right(Pos, Array = #bp_tree_array{}) ->
     case at(Pos, 1, Array) of
         {ok, ?NIL} -> {error, out_of_range};
         {ok, Value} -> {ok, Value};
         {error, Reason} -> {error, Reason}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates key at given position.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_key(pos_integer(), value(), array()) ->
+    {ok, array()} | {error, out_of_range}.
+update_key(Pos, Value, Array = #bp_tree_array{}) ->
+    update(Pos, 0, Value, Array).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -187,13 +200,40 @@ append(Key, Value, Array = #bp_tree_array{size = Size}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes key-value pair from an array.
+%% Prepends key-value pair to an array.
 %% @end
 %%--------------------------------------------------------------------
--spec erase(key(), array()) -> {ok, array()} | {error, not_found}.
-erase(Key, Array = #bp_tree_array{}) ->
+-spec prepend(key(), {value(), value()}, array()) ->
+    {ok, array()} | {error, out_of_space}.
+prepend(_Key, _Value, #bp_tree_array{size = Size, data = Data})
+    when Size == erlang:size(Data) div 2 ->
+    {error, out_of_space};
+prepend(Key, Value, Array = #bp_tree_array{}) ->
+    Array2 = shift_right(1, Array),
+    {ok, Array3} = set_key(1, Key, Array2),
+    {ok, _Array4} = set_value(1, Value, Array3).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes key and left value from an array.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_left(key(), array()) -> {ok, array()} | {error, not_found}.
+remove_left(Key, Array = #bp_tree_array{}) ->
     case find(Key, Array) of
-        {ok, Pos} -> {ok, shift_left(Pos, Array)};
+        {ok, Pos} -> {ok, shift_left(Pos, 0, Array)};
+        {error, Reason} -> {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes key and right value from an array.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_right(key(), array()) -> {ok, array()} | {error, not_found}.
+remove_right(Key, Array = #bp_tree_array{}) ->
+    case find(Key, Array) of
+        {ok, Pos} -> {ok, shift_left(Pos, 1, Array)};
         {error, Reason} -> {error, Reason}
     end.
 
@@ -213,6 +253,29 @@ split(#bp_tree_array{size = Size, data = Data}) ->
         SplitKey,
         #bp_tree_array{size = length(Right) div 2, data = list_to_tuple(Right2)}
     }.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @todo write me!
+%% @end
+%%--------------------------------------------------------------------
+-spec merge(array(), array()) -> {ok, array()} | {error, term()}.
+merge(LArray = #bp_tree_array{size = LSize}, RArray = #bp_tree_array{size = 0}) ->
+    {ok, Right} = right(0, RArray),
+    update_right(LSize, Right, LArray);
+merge(LArray = #bp_tree_array{}, RArray = #bp_tree_array{size = Size}) ->
+    lists:foldl(fun
+        (Pos, {ok, Array}) ->
+            {ok, Key} = key(Pos, RArray),
+            {ok, Left} = left(Pos, RArray),
+            Right2 = case right(Pos, RArray) of
+                {ok, Right} -> Right;
+                {error, out_of_range} -> ?NIL
+            end,
+            append(Key, {Left, Right2}, Array);
+        (_Pos, {error, Reason}) ->
+            {error, Reason}
+    end, {ok, LArray}, lists:seq(1, Size)).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -324,11 +387,11 @@ lower_bound(_Key, Lower, _Upper, _Children) ->
 %% elements to the left, so that to fill the created hole.
 %% @end
 %%--------------------------------------------------------------------
--spec shift_left(pos_integer(), array()) -> array().
-shift_left(Begin, Array = #bp_tree_array{size = Size, data = Data}) ->
+-spec shift_left(pos_integer(), non_neg_integer(), array()) -> array().
+shift_left(Begin, Offset, Array = #bp_tree_array{size = Size, data = Data}) ->
     Data3 = lists:foldl(fun(Pos, Data2) ->
         setelement(Pos, Data2, element(Pos + 2, Data2))
-    end, Data, lists:seq(2 * Begin - 1, 2 * Size - 1)),
+    end, Data, lists:seq(2 * Begin - 1 + Offset, 2 * Size - 1)),
     Data4 = setelement(2 * Size, Data3, ?NIL),
     Data5 = setelement(2 * Size + 1, Data4, ?NIL),
     Array#bp_tree_array{

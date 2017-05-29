@@ -51,7 +51,7 @@ new_should_use_custom_options_test_() ->
 insert_find_permutation_should_succeed_test() ->
     lists:foreach(fun(Seq) ->
         {ok, Tree} = bp_tree:new([{order, 1}]),
-        insert_find(Seq, Tree)
+        find(Seq, insert(Seq, Tree))
     end, permute(lists:seq(1, 7))).
 
 insert_find_random_seq_should_succeed_test_() ->
@@ -61,9 +61,33 @@ insert_find_random_seq_should_succeed_test_() ->
             Seq = random_shuffle(lists:seq(1, Size)),
             Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
             Name2 = lists:flatten(Name),
-            [{Name2, fun() -> insert_find(Seq, Tree) end} | Tests2]
+            [{Name2, fun() -> find(Seq, insert(Seq, Tree)) end} | Tests2]
         end, Tests, [10, 50, 100, 500, 1000, 5000, 10000])
     end, [], [1, 2, 5, 10, 50, 100])).
+
+insert_remove_random_seq_should_succeed_test_() ->
+    lists:reverse(lists:foldl(fun(Order, Tests) ->
+        lists:foldl(fun(Size, Tests2) ->
+            {ok, Tree} = bp_tree:new([{order, Order}]),
+            Seq = random_shuffle(lists:seq(1, Size)),
+            Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
+            Name2 = lists:flatten(Name),
+            [{Name2, fun() -> remove(Seq, insert(Seq, Tree)) end} | Tests2]
+        end, Tests, [10, 50, 100, 500, 1000, 5000, 10000])
+    end, [], [1, 2, 5, 10, 50, 100])).
+
+insert_remove_fold_random_seq_should_succeed_test_() ->
+    lists:reverse(lists:foldl(fun(Order, Tests) ->
+        lists:foldl(fun(Size, Tests2) ->
+            {ok, Tree} = bp_tree:new([{order, Order}]),
+            Seq = random_shuffle(lists:seq(1, Size)),
+            Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
+            Name2 = lists:flatten(Name),
+            [{Name2, fun() ->
+                remove_and_fold(Seq, insert(Seq, Tree))
+            end} | Tests2]
+        end, Tests, [10, 50, 100, 500])
+    end, [], [1, 2, 5, 10, 50])).
 
 fold_should_return_empty_for_empty_tree_test() ->
     {ok, Tree} = bp_tree:new([]),
@@ -156,19 +180,35 @@ fold_should_return_keys_in_batch_test() ->
 %% Internal functions
 %%====================================================================
 
-insert(Seq, Tree) ->
-    lists:foldl(fun(X, Tree2) ->
-        {ok, Tree3} = bp_tree:insert(X, X, Tree2),
-        Tree3
-    end, Tree, Seq).
+insert([], Tree) ->
+    Tree;
+insert([X | Seq], Tree) ->
+    {ok, Tree2} = bp_tree:insert(X, X, Tree),
+    insert(Seq, Tree2).
 
-find(Seq, Tree) ->
-    lists:foreach(fun(X) ->
-        ?assertMatch({{ok, X}, _}, bp_tree:find(X, Tree))
-    end, Seq).
+find([], Tree) ->
+    Tree;
+find([X | Seq], Tree) ->
+    {{ok, X}, Tree2} = bp_tree:find(X, Tree),
+    find(Seq, Tree2).
 
-insert_find(Seq, Tree) ->
-    find(Seq, insert(Seq, Tree)).
+remove([], Tree) ->
+    Tree;
+remove([X | Seq], Tree) ->
+    {ok, Tree2} = bp_tree:remove(X, Tree),
+    remove(Seq, Tree2).
+
+remove_and_fold([], Tree) ->
+    fold([], Tree);
+remove_and_fold([X | Seq], Tree) ->
+    {ok, Tree2} = bp_tree:remove(X, Tree),
+    Tree3 = fold(Seq, Tree2),
+    remove_and_fold(Seq, Tree3).
+
+fold(Seq, Tree) ->
+    {ok, L, Tree2} = bp_tree:fold(fun(K, _V, A) -> [K | A] end, [], Tree, []),
+    ?assertEqual(lists:sort(Seq), lists:reverse(L)),
+    Tree2.
 
 permute([]) -> [[]];
 permute(Seq) -> [[X | Y] || X <- Seq, Y <- permute(Seq -- [X])].

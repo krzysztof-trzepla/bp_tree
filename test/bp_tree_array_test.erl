@@ -60,22 +60,22 @@ insert_should_maintain_order_test_() ->
         ]
     }.
 
-erase_should_return_empty_error_test() ->
+remove_should_return_empty_error_test() ->
     A = bp_tree_array:new(3),
-    ?assertEqual({error, not_found}, bp_tree_array:erase(?K, A)).
+    ?assertEqual({error, not_found}, bp_tree_array:remove_left(?K, A)).
 
-erase_should_return_not_found_error_test() ->
+remove_should_return_not_found_error_test() ->
     A = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(3), ?V]),
-    ?assertEqual({error, not_found}, bp_tree_array:erase(?K(2), A)).
+    ?assertEqual({error, not_found}, bp_tree_array:remove_left(?K(2), A)).
 
-erase_should_succeed_test() ->
+remove_should_succeed_test() ->
     A = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(3), ?V, ?K(5), ?V]),
     A2 = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(5), ?V, nil, nil]),
     A3 = bp_tree_array:from_list([?V, ?K(5), ?V, nil, nil, nil, nil]),
     A4 = bp_tree_array:from_list([?V, nil, nil, nil, nil, nil, nil]),
-    ?assertEqual({ok, A2}, bp_tree_array:erase(?K(3), A)),
-    ?assertEqual({ok, A3}, bp_tree_array:erase(?K(1), A2)),
-    ?assertEqual({ok, A4}, bp_tree_array:erase(?K(5), A3)).
+    ?assertEqual({ok, A2}, bp_tree_array:remove_left(?K(3), A)),
+    ?assertEqual({ok, A3}, bp_tree_array:remove_left(?K(1), A2)),
+    ?assertEqual({ok, A4}, bp_tree_array:remove_left(?K(5), A3)).
 
 accessor_should_succeed_test_() ->
     {setup,
@@ -103,7 +103,7 @@ accessor_should_return_out_of_range_error_test_() ->
             fun(A) ->
                 ?assertEqual({error, out_of_range}, bp_tree_array:left(0, A)),
                 ?assertEqual({error, out_of_range}, bp_tree_array:key(0, A)),
-                ?assertEqual({error, out_of_range}, bp_tree_array:right(0, A))
+                ?assertEqual({ok, ?V}, bp_tree_array:right(0, A))
             end,
             fun(A) ->
                 ?assertEqual({error, out_of_range}, bp_tree_array:left(3, A)),

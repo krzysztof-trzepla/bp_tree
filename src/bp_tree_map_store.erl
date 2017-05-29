@@ -15,7 +15,7 @@
 
 %% bp_tree_store callbacks
 -export([init/1, terminate/1]).
--export([set_root_id/2, get_root_id/1]).
+-export([set_root_id/2, unset_root_id/1, get_root_id/1]).
 -export([create_node/2, get_node/2, update_node/3, delete_node/2]).
 
 -record(state, {
@@ -48,6 +48,15 @@ init(_Args) ->
     {ok | {error, term()}, state()}.
 set_root_id(NodeId, State = #state{}) ->
     {ok, State#state{root_id = NodeId}}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link bp_tree_store:unset_root_id/1}
+%% @end
+%%--------------------------------------------------------------------
+-spec unset_root_id(state()) -> {ok | {error, term()}, state()}.
+unset_root_id(State = #state{}) ->
+    {ok, State#state{root_id = undefined}}.
 
 %%--------------------------------------------------------------------
 %% @doc

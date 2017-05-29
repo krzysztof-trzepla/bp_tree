@@ -15,7 +15,7 @@
 
 %% API exports
 -export([new/0, new/1]).
--export([find/2, insert/3, fold/3, fold/4]).
+-export([find/2, insert/3, remove/2, fold/3, fold/4]).
 
 -record(fold_token, {
     function :: fold_fun(),
@@ -129,6 +129,22 @@ insert(Key, Value, Tree = #bp_tree{order = Order}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes key and associated value from a B+ tree.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove(key(), tree()) -> {ok | error() | error_stacktrace(), tree()}.
+remove(Key, Tree = #bp_tree{}) ->
+    try
+        {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+        {Path, Tree3} = find_path_with_sibling(Key, RootId, Tree2),
+        remove(Key, Path, undefined, Tree3)
+    catch
+        _:{badmatch, Reason} -> {{error, Reason}, Tree};
+        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Folds B+ tree leafs using continuation token.
 %% @end
 %%--------------------------------------------------------------------
@@ -224,6 +240,22 @@ find_path(Key, NodeId, Tree, Path) ->
         {error, not_found} -> {Path2, Tree2}
     end.
 
+
+find_path_with_sibling(Key, NodeId, Tree) ->
+    find_path_with_sibling(Key, NodeId, Tree, undefined, undefined, []).
+
+find_path_with_sibling(Key, NodeId, Tree, ParentKey, SNodeId, Path) ->
+    {{ok, Node}, Tree2} = bp_tree_store:get_node(NodeId, Tree),
+    Path2 = [{{NodeId, Node}, ParentKey, SNodeId} | Path],
+    case bp_tree_node:next_with_sibling(Key, Node) of
+        {ok, LNodeId, Key2, RNodeId} when Key =< Key2 ->
+            find_path_with_sibling(Key, LNodeId, Tree2, Key2, RNodeId, Path2);
+        {ok, LNodeId, Key2, RNodeId} ->
+            find_path_with_sibling(Key, RNodeId, Tree2, Key2, LNodeId, Path2);
+        {error, not_found} ->
+            {Path2, Tree2}
+    end.
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -315,11 +347,64 @@ insert(Key, Value, [{NodeId, Node} | Path], Tree) ->
             bp_tree_store:update_node(NodeId, Node2, Tree);
         {ok, LNode, Key2, RNode} ->
             {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
-            LNode2 = bp_tree_node:set_next(RNodeId, LNode),
+            LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
             {ok, Tree3} = bp_tree_store:update_node(NodeId, LNode2, Tree2),
             insert(Key2, {NodeId, RNodeId}, Path, Tree3);
         {error, Reason} ->
-            {error, Reason}
+            {{error, Reason}, Tree}
+    end.
+
+remove(Key, [{{NodeId, Node}, undefined, undefined}], ChildId, Tree) ->
+    case bp_tree_node:remove(Key, Node) of
+        {ok, Node2} ->
+            case {bp_tree_node:size(Node2), ChildId} of
+                {0, undefined} ->
+                    {ok, Tree2} = bp_tree_store:delete_node(NodeId, Tree),
+                    bp_tree_store:unset_root_id(Tree2);
+                {0, _} ->
+                    {ok, Tree2} = bp_tree_store:delete_node(NodeId, Tree),
+                    bp_tree_store:set_root_id(ChildId, Tree2);
+                _ ->
+                    bp_tree_store:update_node(NodeId, Node2, Tree)
+            end;
+        {error, Reason} ->
+            {{error, Reason}, Tree}
+    end;
+remove(Key, [{{NodeId, Node}, ParentKey, SNodeId} | Path], _, Tree = #bp_tree{
+    order = Order
+}) ->
+    {ok, Node2} = bp_tree_node:remove(Key, Node),
+    case bp_tree_node:size(Node2) < Order of
+        true ->
+            {{ok, SNode}, Tree2} = bp_tree_store:get_node(SNodeId, Tree),
+            case bp_tree_node:size(SNode) > Order of
+                true when Key =< ParentKey ->
+                    {Node3, ParentKey2, SNode2} = bp_tree_node:rotate_left(Node2, ParentKey, SNode),
+                    [{{PNodeId, PNode}, _, _} | _] = Path,
+                    {ok, PNode2} = bp_tree_node:replace_key(ParentKey, ParentKey2, PNode),
+                    {ok, Tree3} = bp_tree_store:update_node(SNodeId, SNode2, Tree2),
+                    {ok, Tree4} = bp_tree_store:update_node(PNodeId, PNode2, Tree3),
+                    {ok, _Tree5} = bp_tree_store:update_node(NodeId, Node3, Tree4);
+                true ->
+                    {SNode2, ParentKey2, Node3} = bp_tree_node:rotate_right(SNode, ParentKey, Node2),
+                    [{{PNodeId, PNode}, _, _} | _] = Path,
+                    {ok, PNode2} = bp_tree_node:replace_key(ParentKey, ParentKey2, PNode),
+                    {ok, Tree3} = bp_tree_store:update_node(SNodeId, SNode2, Tree2),
+                    {ok, Tree4} = bp_tree_store:update_node(PNodeId, PNode2, Tree3),
+                    {ok, _Tree5} = bp_tree_store:update_node(NodeId, Node3, Tree4);
+                false when Key =< ParentKey ->
+                    Node3 = bp_tree_node:merge(Node2, ParentKey, SNode),
+                    {ok, Tree3} = bp_tree_store:delete_node(SNodeId, Tree2),
+                    {ok, Tree4} = bp_tree_store:update_node(NodeId, Node3, Tree3),
+                    remove(ParentKey, Path, NodeId, Tree4);
+                false ->
+                    SNode2 = bp_tree_node:merge(SNode, ParentKey, Node2),
+                    {ok, Tree3} = bp_tree_store:delete_node(NodeId, Tree2),
+                    {ok, Tree4} = bp_tree_store:update_node(SNodeId, SNode2, Tree3),
+                    remove(ParentKey, Path, SNodeId, Tree4)
+            end;
+        false ->
+            bp_tree_store:update_node(NodeId, Node2, Tree)
     end.
 
 %%--------------------------------------------------------------------

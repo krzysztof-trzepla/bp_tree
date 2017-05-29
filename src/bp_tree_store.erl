@@ -19,7 +19,7 @@
 
 -export_type([args/0, state/0]).
 
--export([get_root_id/1, set_root_id/2]).
+-export([get_root_id/1, set_root_id/2, unset_root_id/1]).
 -export([create_node/2, get_node/2, update_node/3, delete_node/2]).
 
 %%====================================================================
@@ -28,11 +28,14 @@
 
 -callback init(args()) -> {ok, state()} | {error, term()}.
 
--callback get_root_id(state()) ->
-    {{ok, bp_tree_node:id()} | {error, term()}, state()}.
-
 -callback set_root_id(bp_tree_node:id(), state()) ->
     {ok | {error, term()}, state()}.
+
+-callback unset_root_id(state()) ->
+    {ok | {error, term()}, state()}.
+
+-callback get_root_id(state()) ->
+    {{ok, bp_tree_node:id()} | {error, term()}, state()}.
 
 -callback create_node(bp_tree:tree_node(), state()) ->
     {{ok, bp_tree_node:id()} | {error, term()}, state()}.
@@ -54,21 +57,6 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns root node ID of B+ tree.
-%% @end
-%%--------------------------------------------------------------------
--spec get_root_id(bp_tree:tree()) ->
-    {{ok, bp_tree_node:id()} | {error, term()}, bp_tree:tree()}.
-get_root_id(Tree = #bp_tree{store_module = Module, store_state = State}) ->
-    case Module:get_root_id(State) of
-        {{ok, RootId}, State2} ->
-            {{ok, RootId}, Tree#bp_tree{store_state = State2}};
-        {{error, Reason}, State2} ->
-            {{error, Reason}, Tree#bp_tree{store_state = State2}}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Updates root node ID of B+ tree.
 %% @end
 %%--------------------------------------------------------------------
@@ -81,6 +69,38 @@ set_root_id(RootId, Tree = #bp_tree{
     case Module:set_root_id(RootId, State) of
         {ok, State2} ->
             {ok, Tree#bp_tree{store_state = State2}};
+        {{error, Reason}, State2} ->
+            {{error, Reason}, Tree#bp_tree{store_state = State2}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears root node ID of B+ tree.
+%% @end
+%%--------------------------------------------------------------------
+-spec unset_root_id(bp_tree:tree()) -> {ok | {error, term()}, bp_tree:tree()}.
+unset_root_id(Tree = #bp_tree{
+    store_module = Module,
+    store_state = State
+}) ->
+    case Module:unset_root_id(State) of
+        {ok, State2} ->
+            {ok, Tree#bp_tree{store_state = State2}};
+        {{error, Reason}, State2} ->
+            {{error, Reason}, Tree#bp_tree{store_state = State2}}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns root node ID of B+ tree.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_root_id(bp_tree:tree()) ->
+    {{ok, bp_tree_node:id()} | {error, term()}, bp_tree:tree()}.
+get_root_id(Tree = #bp_tree{store_module = Module, store_state = State}) ->
+    case Module:get_root_id(State) of
+        {{ok, RootId}, State2} ->
+            {{ok, RootId}, Tree#bp_tree{store_state = State2}};
         {{error, Reason}, State2} ->
             {{error, Reason}, Tree#bp_tree{store_state = State2}}
     end.

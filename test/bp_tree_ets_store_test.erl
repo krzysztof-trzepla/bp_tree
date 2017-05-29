@@ -18,6 +18,7 @@ bp_tree_ets_store_test_() ->
         fun(State) -> bp_tree_ets_store:terminate(State) end,
         [
             fun set_root_should_succeed/1,
+            fun unset_root_should_succeed/1,
             fun get_root_should_succeed/1,
             fun get_root_should_return_missing_error/1,
             fun create_root_should_succeed/1,
@@ -32,6 +33,9 @@ bp_tree_ets_store_test_() ->
 
 set_root_should_succeed(State) ->
     ?_assertMatch({ok, _}, bp_tree_ets_store:set_root_id(1, State)).
+
+unset_root_should_succeed(State) ->
+    ?_assertMatch({ok, _}, bp_tree_ets_store:unset_root_id(State)).
 
 get_root_should_succeed(State) ->
     {ok, State2} = bp_tree_ets_store:set_root_id(1, State),
