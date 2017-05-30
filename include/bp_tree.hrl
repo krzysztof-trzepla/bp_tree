@@ -5,11 +5,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This header contains common macros and records definitions.
 %%% @end
 %%%-------------------------------------------------------------------
 
 -ifndef(BP_TREE_HRL).
 -define(BP_TREE_HRL, 1).
+
+-define(NIL, nil).
 
 -record(bp_tree, {
     order :: bp_tree:order(),

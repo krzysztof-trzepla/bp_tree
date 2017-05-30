@@ -210,6 +210,7 @@ fold(Seq, Tree) ->
     ?assertEqual(lists:sort(Seq), lists:reverse(L)),
     Tree2.
 
+%%permute(Seq) -> [Seq];
 permute([]) -> [[]];
 permute(Seq) -> [[X | Y] || X <- Seq, Y <- permute(Seq -- [X])].
 

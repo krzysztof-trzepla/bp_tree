@@ -16,13 +16,13 @@
 -module(bp_tree_array).
 -author("Krzysztof Trzepla").
 
+-include("bp_tree.hrl").
+
 %% API exports
--export([new/1, size/1, full/1]).
--export([key/2, left/2, right/2]).
--export([update_key/3, update_left/3, update_right/3]).
+-export([new/1, size/1]).
+-export([get/2, update/3, remove/2]).
 -export([find/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
--export([remove_left/2, remove_right/2]).
 -export([to_list/1, from_list/1]).
 
 -record(bp_tree_array, {
@@ -32,11 +32,11 @@
 
 -type key() :: any().
 -type value() :: any().
+-type selector() :: key | left | right | both.
+-type pos() :: non_neg_integer() | first | last.
 -opaque array() :: #bp_tree_array{}.
 
--export_type([array/0]).
-
--define(NIL, nil).
+-export_type([array/0, selector/0]).
 
 %%====================================================================
 %% API functions
@@ -44,7 +44,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates new array.
+%% Creates a new array.
 %% @end
 %%--------------------------------------------------------------------
 -spec new(pos_integer()) -> array().
@@ -56,7 +56,7 @@ new(Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns array size.
+%% Returns the size of an array.
 %% @end
 %%--------------------------------------------------------------------
 -spec size(array()) -> non_neg_integer().
@@ -65,85 +65,68 @@ size(#bp_tree_array{size = Size}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns true if array size reached its maximum, otherwise false.
+%% Returns an item from an array at a selected position.
 %% @end
 %%--------------------------------------------------------------------
--spec full(array()) -> boolean().
-full(#bp_tree_array{size = Size, data = Data}) ->
-    Size == (erlang:size(Data) div 2).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns key at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec key(pos_integer(), array()) -> {ok, key()} | {error, out_of_range}.
-key(Pos, Array = #bp_tree_array{}) ->
-    at(Pos, 0, Array).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns left value at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec left(pos_integer(), array()) -> {ok, value()} | {error, out_of_range}.
-left(Pos, Array = #bp_tree_array{}) ->
-    at(Pos, -1, Array).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns right value at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec right(non_neg_integer(), array()) -> {ok, value()} | {error, out_of_range}.
-right(0, #bp_tree_array{data = Data}) ->
+-spec get({selector(), pos()}, array()) ->
+    {ok, value() | {value(), value()}} | {error, out_of_range}.
+get({Selector, first}, Array = #bp_tree_array{}) ->
+    get({Selector, 1}, Array);
+get({Selector, last}, Array = #bp_tree_array{size = Size}) ->
+    get({Selector, Size}, Array);
+get({right, 0}, #bp_tree_array{data = Data}) ->
     {ok, erlang:element(1, Data)};
-right(Pos, Array = #bp_tree_array{}) ->
-    case at(Pos, 1, Array) of
-        {ok, ?NIL} -> {error, out_of_range};
-        {ok, Value} -> {ok, Value};
-        {error, Reason} -> {error, Reason}
-    end.
+get({_Selector, Pos}, #bp_tree_array{size = Size})
+    when Pos < 1 orelse Pos > Size ->
+    {error, out_of_range};
+get({left, Pos}, #bp_tree_array{data = Data}) ->
+    {ok, erlang:element(2 * Pos - 1, Data)};
+get({key, Pos}, #bp_tree_array{data = Data}) ->
+    {ok, erlang:element(2 * Pos, Data)};
+get({right, Pos}, #bp_tree_array{data = Data}) ->
+    {ok, erlang:element(2 * Pos + 1, Data)};
+get({both, Pos}, #bp_tree_array{data = Data}) ->
+    {ok, {erlang:element(2 * Pos - 1, Data), erlang:element(2 * Pos + 1, Data)}}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates key at given position.
+%% Returns an item in an array at a selected position.
 %% @end
 %%--------------------------------------------------------------------
--spec update_key(pos_integer(), value(), array()) ->
-    {ok, array()} | {error, out_of_range}.
-update_key(Pos, Value, Array = #bp_tree_array{}) ->
-    update(Pos, 0, Value, Array).
+-spec update({selector(), pos()}, value() | {value(), value()},
+    array()) -> {ok, array()} | {error, out_of_range}.
+update({Selector, first}, Value, Array = #bp_tree_array{}) ->
+    update({Selector, 1}, Value, Array);
+update({Selector, last}, Value, Array = #bp_tree_array{size = Size}) ->
+    update({Selector, Size}, Value, Array);
+update({right, 0}, Value, Array = #bp_tree_array{data = Data}) ->
+    {ok, Array#bp_tree_array{data = erlang:setelement(1, Data, Value)}};
+update({_Selector, Pos}, _Value, #bp_tree_array{size = Size})
+    when Pos < 1 orelse Pos > Size ->
+    {error, out_of_range};
+update({left, Pos}, Value, Array = #bp_tree_array{data = Data}) ->
+    Data2 = erlang:setelement(2 * Pos - 1, Data, Value),
+    {ok, Array#bp_tree_array{data = Data2}};
+update({key, Pos}, Value, Array = #bp_tree_array{data = Data}) ->
+    Data2 = erlang:setelement(2 * Pos, Data, Value),
+    {ok, Array#bp_tree_array{data = Data2}};
+update({right, Pos}, Value, Array = #bp_tree_array{data = Data}) ->
+    Data2 = erlang:setelement(2 * Pos + 1, Data, Value),
+    {ok, Array#bp_tree_array{data = Data2}};
+update({both, Pos}, {LValue, RValue}, Array = #bp_tree_array{data = Data}) ->
+    Data2 = erlang:setelement(2 * Pos - 1, Data, LValue),
+    Data3 = erlang:setelement(2 * Pos + 1, Data2, RValue),
+    {ok, Array#bp_tree_array{data = Data3}}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates left value at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec update_left(pos_integer(), value(), array()) ->
-    {ok, array()} | {error, out_of_range}.
-update_left(Pos, Value, Array = #bp_tree_array{}) ->
-    update(Pos, -1, Value, Array).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates right value at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec update_right(pos_integer(), value(), array()) ->
-    {ok, array()} | {error, out_of_range}.
-update_right(Pos, Value, Array = #bp_tree_array{}) ->
-    update(Pos, 1, Value, Array).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns position of given key or fails with missing error.
+%% Returns position of a key in an array or fails with a missing error.
 %% @end
 %%--------------------------------------------------------------------
 -spec find(key(), array()) -> {ok, pos_integer()} | {error, not_found}.
 find(Key, Array = #bp_tree_array{}) ->
     Pos = lower_bound(Key, Array),
-    case key(Pos, Array) of
+    case get({key, Pos}, Array) of
         {ok, Key} -> {ok, Pos};
         {ok, _} -> {error, not_found};
         {error, out_of_range} -> {error, not_found}
@@ -151,7 +134,8 @@ find(Key, Array = #bp_tree_array{}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns position of a first key that does not compare less than provided key.
+%% Returns a position of a first key in an array that does not compare less
+%% than a key.
 %% @end
 %%--------------------------------------------------------------------
 -spec lower_bound(key(), array()) -> pos_integer().
@@ -160,122 +144,109 @@ lower_bound(Key, Array = #bp_tree_array{size = Size}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Inserts key-value pair into an array.
+%% Inserts a key-value pair into an array.
 %% @end
 %%--------------------------------------------------------------------
--spec insert(key(), {value(), value()}, array()) ->
+-spec insert({selector(), key()}, value() | {value(), value()}, array()) ->
     {ok, array()} | {error, out_of_space | already_exists}.
-insert(_Key, _Value, #bp_tree_array{size = Size, data = Data})
+insert({_Selector, _Key}, _Value, #bp_tree_array{size = Size, data = Data})
     when Size == erlang:size(Data) div 2 ->
     {error, out_of_space};
-insert(Key, Value, Array = #bp_tree_array{size = Size}) ->
+insert({Selector, Key}, Value, Array = #bp_tree_array{size = Size}) ->
     Pos = lower_bound(Key, Array),
-    case key(Pos, Array) of
+    case get({key, Pos}, Array) of
         {ok, Key} ->
             {error, already_exists};
         {ok, _} ->
             Array2 = shift_right(Pos, Array),
-            {ok, Array3} = set_key(Pos, Key, Array2),
-            {ok, _Array4} = set_value(Pos, Value, Array3);
+            {ok, Array3} = update({key, Pos}, Key, Array2),
+            {ok, _Array4} = update({Selector, Pos}, Value, Array3);
         {error, out_of_range} ->
             Array2 = Array#bp_tree_array{size = Size + 1},
-            {ok, Array3} = set_key(Size + 1, Key, Array2),
-            {ok, _Array4} = set_value(Size + 1, Value, Array3)
+            {ok, Array3} = update({key, Size + 1}, Key, Array2),
+            {ok, _Array4} = update({Selector, Size + 1}, Value, Array3)
     end.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Appends key-value pair to an array.
+%% Appends a key-value pair to an array.
 %% @end
 %%--------------------------------------------------------------------
--spec append(key(), {value(), value()}, array()) ->
+-spec append({selector(), key()}, value() | {value(), value()}, array()) ->
     {ok, array()} | {error, out_of_space}.
-append(_Key, _Value, #bp_tree_array{size = Size, data = Data})
+append({_Selector, _Key}, _Value, #bp_tree_array{size = Size, data = Data})
     when Size == erlang:size(Data) div 2 ->
     {error, out_of_space};
-append(Key, Value, Array = #bp_tree_array{size = Size}) ->
+append({Selector, Key}, Value, Array = #bp_tree_array{size = Size}) ->
     Array2 = Array#bp_tree_array{size = Size + 1},
-    {ok, Array3} = set_key(Size + 1, Key, Array2),
-    {ok, _Array4} = set_value(Size + 1, Value, Array3).
+    {ok, Array3} = update({key, Size + 1}, Key, Array2),
+    {ok, _Array4} = update({Selector, Size + 1}, Value, Array3).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prepends key-value pair to an array.
+%% Prepends a key-value pair to an array.
 %% @end
 %%--------------------------------------------------------------------
--spec prepend(key(), {value(), value()}, array()) ->
+-spec prepend({selector(), key()}, value() | {value(), value()}, array()) ->
     {ok, array()} | {error, out_of_space}.
-prepend(_Key, _Value, #bp_tree_array{size = Size, data = Data})
+prepend({_Selector, _Key}, _Value, #bp_tree_array{size = Size, data = Data})
     when Size == erlang:size(Data) div 2 ->
     {error, out_of_space};
-prepend(Key, Value, Array = #bp_tree_array{}) ->
+prepend({Selector, Key}, Value, Array = #bp_tree_array{}) ->
     Array2 = shift_right(1, Array),
-    {ok, Array3} = set_key(1, Key, Array2),
-    {ok, _Array4} = set_value(1, Value, Array3).
+    {ok, Array3} = update({key, 1}, Key, Array2),
+    {ok, _Array4} = update({Selector, 1}, Value, Array3).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes key and left value from an array.
+%% Removes a key and associated value from an array.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_left(key(), array()) -> {ok, array()} | {error, not_found}.
-remove_left(Key, Array = #bp_tree_array{}) ->
+-spec remove({selector(), key()}, array()) -> {ok, array()} | {error, term()}.
+remove({Selector, Key}, Array = #bp_tree_array{}) ->
     case find(Key, Array) of
-        {ok, Pos} -> {ok, shift_left(Pos, 0, Array)};
+        {ok, Pos} when Selector =:= left -> {ok, shift_left(Pos, 0, Array)};
+        {ok, Pos} when Selector =:= right -> {ok, shift_left(Pos, 1, Array)};
         {error, Reason} -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes key and right value from an array.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_right(key(), array()) -> {ok, array()} | {error, not_found}.
-remove_right(Key, Array = #bp_tree_array{}) ->
-    case find(Key, Array) of
-        {ok, Pos} -> {ok, shift_left(Pos, 1, Array)};
-        {error, Reason} -> {error, Reason}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Splits an array in half. Returns left, right part and a split key.
+%% Splits an array in half. Returns left and right parts and a split key.
 %% @end
 %%--------------------------------------------------------------------
 -spec split(array()) -> {array(), key(), array()}.
-split(#bp_tree_array{size = Size, data = Data}) ->
+split(Array = #bp_tree_array{size = Size, data = Data}) ->
     Pivot = Size div 2 + 1,
-    {Left, [SplitKey | Right]} = lists:split(2 * Pivot - 1, tuple_to_list(Data)),
-    Left2 = Left ++ lists:duplicate(erlang:size(Data) - length(Left), ?NIL),
-    Right2 = Right ++ lists:duplicate(erlang:size(Data) - length(Right), ?NIL),
+    Begin = 2 * Pivot,
+    SplitKey = element(Begin, Data),
+    LData = setelement(Begin, Data, ?NIL),
+    RData = list_to_tuple(lists:duplicate(erlang:size(Data), ?NIL)),
+    {LData3, RData3} = lists:foldl(fun(Pos, {LData2, RData2}) ->
+        {
+            setelement(Begin + Pos, LData2, ?NIL),
+            setelement(Pos, RData2, element(Begin + Pos, LData2))
+        }
+    end, {LData, RData}, lists:seq(1, Size)),
     {
-        #bp_tree_array{size = length(Left) div 2, data = list_to_tuple(Left2)},
+        Array#bp_tree_array{size = Pivot - 1, data = LData3},
         SplitKey,
-        #bp_tree_array{size = length(Right) div 2, data = list_to_tuple(Right2)}
+        Array#bp_tree_array{size = Pivot - 1, data = RData3}
     }.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @todo write me!
+%% Merges two arrays into a single array.
 %% @end
 %%--------------------------------------------------------------------
--spec merge(array(), array()) -> {ok, array()} | {error, term()}.
-merge(LArray = #bp_tree_array{size = LSize}, RArray = #bp_tree_array{size = 0}) ->
-    {ok, Right} = right(0, RArray),
-    update_right(LSize, Right, LArray);
-merge(LArray = #bp_tree_array{}, RArray = #bp_tree_array{size = Size}) ->
-    lists:foldl(fun
-        (Pos, {ok, Array}) ->
-            {ok, Key} = key(Pos, RArray),
-            {ok, Left} = left(Pos, RArray),
-            Right2 = case right(Pos, RArray) of
-                {ok, Right} -> Right;
-                {error, out_of_range} -> ?NIL
-            end,
-            append(Key, {Left, Right2}, Array);
-        (_Pos, {error, Reason}) ->
-            {error, Reason}
-    end, {ok, LArray}, lists:seq(1, Size)).
+-spec merge(array(), array()) -> array().
+merge(LArray = #bp_tree_array{size = LSize, data = LData},
+    #bp_tree_array{size = RSize, data = RData}) ->
+    Begin = 2 * LSize,
+    LData2 = lists:foldl(fun(Pos, Data) ->
+        setelement(Begin + Pos, Data, element(Pos, RData))
+    end, LData, lists:seq(1, 2 * RSize + 1)),
+    LArray#bp_tree_array{size = LSize + RSize, data = LData2}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -306,73 +277,14 @@ from_list(List) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns key or value at given position + offset.
-%% @end
-%%--------------------------------------------------------------------
--spec at(pos_integer(), integer(), array()) ->
-    {ok, key() | value()} | {error, out_of_range}.
-at(Pos, Offset, #bp_tree_array{size = Size, data = Data})
-    when 1 =< Pos andalso Pos =< Size ->
-    {ok, element(2 * Pos + Offset, Data)};
-at(_Pos, _Offset, #bp_tree_array{}) ->
-    {error, out_of_range}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates key or value at given position + offset.
-%% @end
-%%--------------------------------------------------------------------
--spec update(pos_integer(), integer(), key() | value(), array()) ->
-    {ok, array()} | {error, out_of_range}.
-update(Pos, Offset, Value, Array = #bp_tree_array{size = Size, data = Data})
-    when 1 =< Pos andalso Pos =< Size ->
-    {ok, Array#bp_tree_array{data = setelement(2 * Pos + Offset, Data, Value)}};
-update(_Pos, _Offset, _Value, #bp_tree_array{}) ->
-    {error, out_of_range}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Sets key at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec set_key(pos_integer(), key(), array()) ->
-    {ok, array()} | {error, out_of_range}.
-set_key(Pos, Key, Array = #bp_tree_array{}) ->
-    update(Pos, 0, Key, Array).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Sets value at given position.
-%% @end
-%%--------------------------------------------------------------------
--spec set_value(pos_integer(), {value(), value()}, array()) ->
-    {ok, array()} | {error, out_of_range}.
-set_value(_Pos, {undefined, undefined}, Array = #bp_tree_array{}) ->
-    {ok, Array};
-set_value(Pos, {LValue, undefined}, Array = #bp_tree_array{}) ->
-    update(Pos, -1, LValue, Array);
-set_value(Pos, {undefined, RValue}, Array = #bp_tree_array{}) ->
-    update(Pos, 1, RValue, Array);
-set_value(Pos, {LValue, RValue}, Array = #bp_tree_array{}) ->
-    case update(Pos, -1, LValue, Array) of
-        {ok, Array2} -> update(Pos, 1, RValue, Array2);
-        {error, Reason} -> {error, Reason}
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns position of a first key that does not compare less than provided key
-%% in range [Lower, Upper].
+%% Returns position of a first key in range [Lower, Upper] that does not compare
+%% less than a key.
 %% @end
 %%--------------------------------------------------------------------
 -spec lower_bound(key(), pos_integer(), pos_integer(), array()) -> pos_integer().
 lower_bound(Key, Lower, Upper, Array) when Lower =< Upper ->
     Mid = (Lower + Upper) div 2,
-    {ok, MidKey} = key(Mid, Array),
+    {ok, MidKey} = get({key, Mid}, Array),
     case MidKey < Key of
         true -> lower_bound(Key, Mid + 1, Upper, Array);
         false -> lower_bound(Key, Lower, Mid - 1, Array)
@@ -383,8 +295,8 @@ lower_bound(_Key, Lower, _Upper, _Children) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Removes key and its right value at Begin position and shifts all following
-%% elements to the left, so that to fill the created hole.
+%% Removes key and associated value at Begin position and shifts all following
+%% items to the left, so that to fill the hole.
 %% @end
 %%--------------------------------------------------------------------
 -spec shift_left(pos_integer(), non_neg_integer(), array()) -> array().
