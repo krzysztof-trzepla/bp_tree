@@ -12,7 +12,7 @@
 -ifndef(BP_TREE_HRL).
 -define(BP_TREE_HRL, 1).
 
--define(NIL, nil).
+-define(NIL, null).
 
 -record(bp_tree, {
     order :: bp_tree:order(),

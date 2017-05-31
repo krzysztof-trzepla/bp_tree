@@ -74,9 +74,9 @@ remove_should_return_not_found_error_test() ->
 
 remove_should_succeed_test() ->
     A = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(3), ?V, ?K(5), ?V]),
-    A2 = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(5), ?V, nil, nil]),
-    A3 = bp_tree_array:from_list([?V, ?K(5), ?V, nil, nil, nil, nil]),
-    A4 = bp_tree_array:from_list([?V, nil, nil, nil, nil, nil, nil]),
+    A2 = bp_tree_array:from_list([?V, ?K(1), ?V, ?K(5), ?V, ?NIL, ?NIL]),
+    A3 = bp_tree_array:from_list([?V, ?K(5), ?V, ?NIL, ?NIL, ?NIL, ?NIL]),
+    A4 = bp_tree_array:from_list([?V, ?NIL, ?NIL, ?NIL, ?NIL, ?NIL, ?NIL]),
     ?assertEqual({ok, A2}, bp_tree_array:remove({left, ?K(3)}, A)),
     ?assertEqual({ok, A3}, bp_tree_array:remove({left, ?K(1)}, A2)),
     ?assertEqual({ok, A4}, bp_tree_array:remove({left, ?K(5)}, A3)).
