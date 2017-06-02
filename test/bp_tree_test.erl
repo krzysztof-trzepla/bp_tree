@@ -22,7 +22,7 @@ new_should_use_defaults_test() ->
     ?assertMatch({ok, #bp_tree{
         order = 50,
         store_module = bp_tree_map_store
-    }}, bp_tree:new()).
+    }}, bp_tree:init()).
 
 new_should_use_custom_options_test_() ->
     StoreModule = some_module,
@@ -42,7 +42,7 @@ new_should_use_custom_options_test_() ->
             order = 32,
             store_module = StoreModule,
             store_state = state
-        }}, bp_tree:new([
+        }}, bp_tree:init([
             {order, 32},
             {store_module, StoreModule},
             {store_args, StoreArgs}
@@ -51,14 +51,14 @@ new_should_use_custom_options_test_() ->
 
 insert_find_permutation_should_succeed_test() ->
     lists:foreach(fun(Seq) ->
-        {ok, Tree} = bp_tree:new([{order, 1}]),
+        {ok, Tree} = bp_tree:init([{order, 1}]),
         find(Seq, insert(Seq, Tree))
     end, permute(lists:seq(1, 7))).
 
 insert_find_random_seq_should_succeed_test_() ->
     lists:reverse(lists:foldl(fun(Order, Tests) ->
         lists:foldl(fun(Size, Tests2) ->
-            {ok, Tree} = bp_tree:new([{order, Order}]),
+            {ok, Tree} = bp_tree:init([{order, Order}]),
             Seq = random_shuffle(lists:seq(1, Size)),
             Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
             Name2 = lists:flatten(Name),
@@ -69,7 +69,7 @@ insert_find_random_seq_should_succeed_test_() ->
 insert_remove_random_seq_should_succeed_test_() ->
     lists:reverse(lists:foldl(fun(Order, Tests) ->
         lists:foldl(fun(Size, Tests2) ->
-            {ok, Tree} = bp_tree:new([{order, Order}]),
+            {ok, Tree} = bp_tree:init([{order, Order}]),
             Seq = random_shuffle(lists:seq(1, Size)),
             Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
             Name2 = lists:flatten(Name),
@@ -80,7 +80,7 @@ insert_remove_random_seq_should_succeed_test_() ->
 insert_remove_fold_random_seq_should_succeed_test_() ->
     lists:reverse(lists:foldl(fun(Order, Tests) ->
         lists:foldl(fun(Size, Tests2) ->
-            {ok, Tree} = bp_tree:new([{order, Order}]),
+            {ok, Tree} = bp_tree:init([{order, Order}]),
             Seq = random_shuffle(lists:seq(1, Size)),
             Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
             Name2 = lists:flatten(Name),
@@ -91,7 +91,7 @@ insert_remove_fold_random_seq_should_succeed_test_() ->
     end, [], [1, 2, 5, 10, 50])).
 
 fold_should_return_empty_for_empty_tree_test() ->
-    {ok, Tree} = bp_tree:new([]),
+    {ok, Tree} = bp_tree:init([]),
     {ok, [], _} = bp_tree:fold(fun(K, _V, Acc) ->
         [K | Acc]
     end, [], Tree, []).
@@ -99,7 +99,7 @@ fold_should_return_empty_for_empty_tree_test() ->
 fold_should_process_keys_in_ascending_order_test_() ->
     lists:reverse(lists:foldl(fun(Order, Tests) ->
         lists:foldl(fun(Size, Tests2) ->
-            {ok, Tree} = bp_tree:new([{order, Order}]),
+            {ok, Tree} = bp_tree:init([{order, Order}]),
             Seq = lists:seq(1, Size),
             RandomSeq = random_shuffle(Seq),
             Name = io_lib:format("order: ~p, size: ~p", [Order, Size]),
@@ -115,7 +115,7 @@ fold_should_process_keys_in_ascending_order_test_() ->
     end, [], [1, 2, 5, 10, 50, 100])).
 
 fold_should_return_keys_from_range_test_() ->
-    {ok, Tree} = bp_tree:new([{order, 1}]),
+    {ok, Tree} = bp_tree:init([{order, 1}]),
     Seq = lists:seq(1, 10),
     RandomSeq = random_shuffle(Seq),
     Tree2 = insert(RandomSeq, Tree),
@@ -133,7 +133,7 @@ fold_should_return_keys_from_range_test_() ->
     end, [], lists:seq(1, 10)).
 
 fold_should_return_keys_from_offset_test_() ->
-    {ok, Tree} = bp_tree:new([{order, 1}]),
+    {ok, Tree} = bp_tree:init([{order, 1}]),
     Seq = lists:seq(1, 100),
     RandomSeq = random_shuffle(Seq),
     Tree2 = insert(RandomSeq, Tree),
@@ -149,7 +149,7 @@ fold_should_return_keys_from_offset_test_() ->
     end, lists:seq(0, 100)).
 
 fold_should_return_up_to_total_size_keys_test_() ->
-    {ok, Tree} = bp_tree:new([{order, 2}]),
+    {ok, Tree} = bp_tree:init([{order, 2}]),
     Seq = lists:seq(1, 100),
     RandomSeq = random_shuffle(Seq),
     Tree2 = insert(RandomSeq, Tree),
@@ -165,7 +165,7 @@ fold_should_return_up_to_total_size_keys_test_() ->
     end, lists:seq(0, 100)).
 
 fold_should_return_keys_in_batch_test() ->
-    {ok, Tree} = bp_tree:new([{order, 2}]),
+    {ok, Tree} = bp_tree:init([{order, 2}]),
     Seq = lists:seq(1, 100),
     RandomSeq = random_shuffle(Seq),
     Tree2 = insert(RandomSeq, Tree),

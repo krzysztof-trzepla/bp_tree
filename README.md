@@ -29,8 +29,8 @@ Add `bp_tree` as a `rebar` dependency to your project:
 
 ### API
 
-In order to create a B+ tree a `new` function from a `bp_tree` module should be
-called. Overloaded `new/1` function accepts following options:
+In order to create a B+ tree a `init` function from a `bp_tree` module should be
+called. Overloaded `init/1` function accepts following options:
 * `order` - each node of a tree will hold up to 2 * `order` keys
             and 2 * `order` + 1 values (default: `50`),
 * `store_module` - the name of a tree store backend module
@@ -72,7 +72,7 @@ backend, which must implement `bp_tree_store` behaviour. Default `bp_tree_store`
 storage backend is `bp_tree_map_store`, which stores tree nodes in a map. There
 is also `bp_tree_ets_store` module that holds tree structure in an ETS.
 It is easy to add new storage by creating new module implementing `bp_tree_store`
-behaviour and passing its name as `store_module` option to `new/1` function.
+behaviour and passing its name as `store_module` option to `init/1` function.
 
 Test
 ----

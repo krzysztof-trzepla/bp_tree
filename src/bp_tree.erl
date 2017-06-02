@@ -14,7 +14,7 @@
 -include("bp_tree.hrl").
 
 %% API exports
--export([new/0, new/1]).
+-export([init/0, init/1, terminate/1]).
 -export([find/2, insert/3, remove/2, fold/3, fold/4]).
 
 -record(fold_token, {
@@ -35,9 +35,9 @@
 -type tree() :: #bp_tree{}.
 -type tree_node() :: #bp_tree_node{}.
 -type order() :: pos_integer().
--type new_opt() :: {order, order()} |
-                   {store_module, module()} |
-                   {store_args, bp_tree_store:args()}.
+-type init_opt() :: {order, order()} |
+                    {store_module, module()} |
+                    {store_args, bp_tree_store:args()}.
 -opaque fold_token() :: #fold_token{}.
 -type fold_opt() :: {start_key, key()} |
                     {end_key, key()} |
@@ -56,33 +56,35 @@
 %%====================================================================
 
 %%--------------------------------------------------------------------
-%% @equiv new([])
+%% @equiv init([])
 %% @end
 %%--------------------------------------------------------------------
--spec new() -> {ok, tree()} | error().
-new() ->
-    new([]).
+-spec init() -> {ok, tree()} | error().
+init() ->
+    init([]).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates new B+ tree.
+%% Creates B+ tree handle.
 %% @end
 %%--------------------------------------------------------------------
--spec new([new_opt()]) -> {ok, tree()} | error().
-new(Opts) ->
-    Order = proplists:get_value(order, Opts, 50),
-    Module = proplists:get_value(store_module, Opts, bp_tree_map_store),
+-spec init([init_opt()]) -> {ok, tree()} | error().
+init(Opts) ->
     Args = proplists:get_value(store_args, Opts, []),
-    case Module:init(Args) of
-        {ok, State} ->
-            {ok, #bp_tree{
-                order = Order,
-                store_module = Module,
-                store_state = State
-            }};
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    Tree = #bp_tree{
+        order = proplists:get_value(order, Opts, 50),
+        store_module = proplists:get_value(store_module, Opts, bp_tree_map_store)
+    },
+    bp_tree_store:init(Args, Tree).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Cleanups B+ tree handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate(tree()) -> any().
+terminate(Tree = #bp_tree{}) ->
+    bp_tree_store:terminate(Tree).
 
 %%--------------------------------------------------------------------
 %% @doc

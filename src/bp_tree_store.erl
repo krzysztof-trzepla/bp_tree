@@ -19,6 +19,7 @@
 
 -export_type([args/0, state/0]).
 
+-export([init/2, terminate/1]).
 -export([get_root_id/1, set_root_id/2, unset_root_id/1]).
 -export([create_node/2, get_node/2, update_node/3, delete_node/2]).
 
@@ -54,6 +55,27 @@
 %%====================================================================
 %% API functions
 %%====================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Initializes B+ tree store.
+%% @end
+%%--------------------------------------------------------------------
+-spec init(args(), bp_tree:tree()) -> {ok, bp_tree:tree()} | {error, term()}.
+init(Args, Tree = #bp_tree{store_module = Module}) ->
+    case Module:init(Args) of
+        {ok, State} -> {ok, Tree#bp_tree{store_state = State}};
+        {error, Reason} -> {error, Reason}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Cleanups B+ tree store.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate(bp_tree:tree()) -> any().
+terminate(#bp_tree{store_module = Module, store_state = State}) ->
+    Module:terminate(State).
 
 %%--------------------------------------------------------------------
 %% @doc
