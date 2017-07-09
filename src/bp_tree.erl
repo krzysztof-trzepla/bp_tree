@@ -362,7 +362,7 @@ fold_node(Token = #fold_token{
     batch_ctr = BatchCtr
 }, Acc, Node, Tree) ->
     case bp_tree_node:key(Pos, Node) of
-        {ok, Key} when Key > EndKey ->
+        {ok, Key} when EndKey =/= undefined andalso Key > EndKey ->
             {ok, Acc, Tree};
         {ok, Key} when PrevKey =/= undefined andalso Key =< PrevKey ->
             fold_node(Token#fold_token{pos = Pos + 1}, Acc, Node, Tree);

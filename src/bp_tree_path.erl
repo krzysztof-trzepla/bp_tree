@@ -37,7 +37,7 @@ find(Key, NodeId, Tree) ->
     find(Key, NodeId, Tree, []).
 
 %%--------------------------------------------------------------------
-%% @equiv find_with_sibling(Key, NodeId, Tree, nil, nil, [])
+%% @equiv find_with_sibling(Key, NodeId, Tree, null, null, [])
 %% @end
 %%--------------------------------------------------------------------
 -spec find_with_sibling(bp_tree:key(), bp_tree_node:id(), bp_tree:tree()) ->
