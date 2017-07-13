@@ -19,7 +19,7 @@
 -export([right_sibling/1, set_right_sibling/2]).
 -export([child/2, child_with_sibling/2, child_with_right_sibling/2]).
 -export([leftmost_child/1]).
--export([find/2, lower_bound/2]).
+-export([find/2, find_pos/2, lower_bound/2]).
 -export([insert/3, remove/2, merge/3, split/1]).
 -export([rotate_right/3, rotate_left/3, replace_key/3]).
 
@@ -188,11 +188,21 @@ set_right_sibling(_NodeId, Node = #bp_tree_node{leaf = false}) ->
 %%--------------------------------------------------------------------
 -spec find(bp_tree:key(), bp_tree:tree_node()) ->
     {ok, bp_tree:value()} | {error, not_found}.
-find(Key, #bp_tree_node{leaf = true, children = Children}) ->
-    case bp_tree_array:find(Key, Children) of
+find(Key, Node = #bp_tree_node{leaf = true, children = Children}) ->
+    case find_pos(Key, Node) of
         {ok, Pos} -> bp_tree_array:get({left, Pos}, Children);
         {error, Reason} -> {error, Reason}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns position of a key in leaf node or fails with a missing error.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_pos(bp_tree:key(), bp_tree:tree_node()) ->
+    {ok, pos_integer()} | {error, not_found}.
+find_pos(Key, #bp_tree_node{leaf = true, children = Children}) ->
+    bp_tree_array:find(Key, Children).
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -19,11 +19,11 @@ dialyzer:
 
 .PHONY: test
 test:
-	./rebar3 eunit
+	./rebar3 eunit --cover
 
 .PHONY: cover
 cover:
-	./rebar3 cover
+	./rebar3 cover --reset
 
 .PHONY: doc
 doc:

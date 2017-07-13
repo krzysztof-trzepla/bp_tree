@@ -9,7 +9,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(bp_tree_map_store_test).
--author("krzysztof").
+-author("Krzysztof Trzepla").
 
 -include_lib("eunit/include/eunit.hrl").
 
