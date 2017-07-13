@@ -17,7 +17,8 @@
 -export([new/2]).
 -export([key/2, value/2, size/1]).
 -export([right_sibling/1, set_right_sibling/2]).
--export([child/2, child_with_sibling/2, leftmost_child/1]).
+-export([child/2, child_with_sibling/2, child_with_right_sibling/2]).
+-export([leftmost_child/1]).
 -export([find/2, lower_bound/2]).
 -export([insert/3, remove/2, merge/3, split/1]).
 -export([rotate_right/3, rotate_left/3, replace_key/3]).
@@ -92,7 +93,7 @@ child(Key, #bp_tree_node{leaf = false, children = Children}) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns child node with sibling on path from a root to a leaf associated with
-%% a key.
+%% a key. Prefers left child to the right child.
 %% @end
 %%--------------------------------------------------------------------
 -spec child_with_sibling(bp_tree:key(), bp_tree:tree_node()) ->
@@ -116,6 +117,27 @@ child_with_sibling(Key, #bp_tree_node{leaf = false, children = Children}) ->
             {ok, Key2} = bp_tree_array:get({key, last}, Children),
             {ok, {LNodeId, RNodeId}} = bp_tree_array:get({both, last}, Children),
             {ok, LNodeId, Key2, RNodeId}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns child node with right sibling on path from a root to a leaf
+%% associated with a key.
+%% @end
+%%--------------------------------------------------------------------
+-spec child_with_right_sibling(bp_tree:key(), bp_tree:tree_node()) ->
+    {ok, bp_tree_node:id(), bp_tree_node:id()} | {error, not_found}.
+child_with_right_sibling(_Key, #bp_tree_node{leaf = true}) ->
+    {error, not_found};
+child_with_right_sibling(Key, #bp_tree_node{leaf = false, children = Children}) ->
+    Pos = bp_tree_array:lower_bound(Key, Children),
+    case bp_tree_array:get({left, Pos}, Children) of
+        {ok, NodeId} ->
+            {ok, RNodeId} = bp_tree_array:get({right, Pos}, Children),
+            {ok, NodeId, RNodeId};
+        {error, out_of_range} ->
+            {ok, NodeId} = bp_tree_array:get({right, last}, Children),
+            {ok, NodeId, ?NIL}
     end.
 
 %%--------------------------------------------------------------------

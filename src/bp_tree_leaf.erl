@@ -14,7 +14,10 @@
 -include("bp_tree.hrl").
 
 %% API exports
--export([find_leftmost/1, find_key/2]).
+-export([find_leftmost/1, find_key/2, find_next/3]).
+
+-type find_next_result() :: {ok, pos_integer(), bp_tree:tree_node()} |
+                            {error, not_found}.
 
 %%====================================================================
 %% API functions
@@ -52,6 +55,16 @@ find_key(Offset, Tree) ->
             {{error, Reason}, Tree2}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns node and position of next key in B+ tree.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_next(bp_tree:key(), bp_tree_node:id(), bp_tree:tree()) ->
+    {find_next_result(), bp_tree:tree()}.
+find_next(Key, NodeId, Tree) ->
+    find_next(Key, NodeId, Tree, []).
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -63,8 +76,7 @@ find_key(Offset, Tree) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec find_leftmost(bp_tree_node:id(), bp_tree:tree()) ->
-    {{ok, bp_tree_node:id(), bp_tree:tree_node()} | {error, term()},
-        bp_tree:tree()}.
+    {{ok, bp_tree_node:id(), bp_tree:tree_node()}, bp_tree:tree()}.
 find_leftmost(NodeId, Tree) ->
     {{ok, Node}, Tree2} = bp_tree_store:get_node(NodeId, Tree),
     case bp_tree_node:leftmost_child(Node) of
@@ -96,4 +108,47 @@ find_key(Offset, NodeId, Node, Tree) ->
         false ->
             {ok, Key} = bp_tree_node:key(Offset + 1, Node),
             {{ok, Key, Offset + 1, NodeId, Node}, Tree}
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns node and position of next key in B+ tree. Builds a path of right
+%% siblings of nodes along the path from a root node to a leaf associated
+%% with a key.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_next(bp_tree:key(), bp_tree_node:id(), bp_tree:tree(),
+    [bp_tree_node:id()]) -> {find_next_result(), bp_tree:tree()}.
+find_next(Key, NodeId, Tree, Path) ->
+    {{ok, Node}, Tree2} = bp_tree_store:get_node(NodeId, Tree),
+    case bp_tree_node:child_with_right_sibling(Key, Node) of
+        {ok, NodeId2, RNodeId} ->
+            find_next(Key, NodeId2, Tree2, [RNodeId | Path]);
+        {error, not_found} ->
+            find_next_in_leaf(Key, Node, Tree, Path)
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns node and position of next key in B+ tree leaf.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_next_in_leaf(bp_tree:key(), bp_tree:tree_node(), bp_tree:tree(),
+    [bp_tree_node:id()]) -> {find_next_result(), bp_tree:tree()}.
+find_next_in_leaf(Key, Node, Tree, Path) ->
+    Pos = bp_tree_node:lower_bound(Key, Node),
+    case bp_tree_node:value(Pos + 1, Node) of
+        {ok, _} ->
+            {{ok, Pos + 1, Node}, Tree};
+        {error, out_of_range} ->
+            Path2 = lists:dropwhile(fun(SNodeId) -> SNodeId == ?NIL end, Path),
+            case Path2 of
+                [] ->
+                    {{error, not_found}, Tree};
+                [SNodeId | _] ->
+                    {{ok, _, NextNode}, Tree2} = find_leftmost(SNodeId, Tree),
+                    {{ok, 1, NextNode}, Tree2}
+            end
     end.
