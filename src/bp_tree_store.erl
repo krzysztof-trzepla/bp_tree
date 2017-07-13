@@ -70,7 +70,7 @@ init(Args, Tree = #bp_tree{store_module = Module}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Cleanups B+ tree store.
+%% Cleans up B+ tree store.
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(bp_tree:tree()) -> any().

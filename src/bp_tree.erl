@@ -26,7 +26,7 @@
                     {store_module, module()} |
                     {store_args, bp_tree_store:args()}.
 -type fold_init() :: {start_key, key()} |
-                     {next_key, key()} |
+                     {prev_key, key()} |
                      {offset, non_neg_integer()}.
 -type fold_acc() :: any().
 -type fold_fun() :: fun((key(), value(), fold_acc()) -> fold_acc()).
@@ -159,7 +159,7 @@ fold({start_key, Key}, Fun, Acc, Tree) ->
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
-fold({next_key, Key}, Fun, Acc, Tree) ->
+fold({prev_key, Key}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_next(Key, Tree) of
         {{ok, Pos, Node}, Tree2} ->
             {{ok, fold_node(Pos, Node, Fun, Acc)}, Tree2};
