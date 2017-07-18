@@ -31,7 +31,7 @@
 -type fold_acc() :: any().
 -type fold_fun() :: fun((key(), value(), fold_acc()) -> fold_acc()).
 -type error() :: {error, term()}.
--type error_stacktrace() :: {error, term(), [erlang:stack_item()]}.
+-type error_stacktrace() :: {error, {term(), [erlang:stack_item()]}}.
 
 -export_type([key/0, value/0, tree/0, tree_node/0, order/0]).
 
@@ -84,7 +84,7 @@ find(Key, Tree = #bp_tree{}) ->
         {bp_tree_node:find(Key, Leaf), Tree3}
     catch
         _:{badmatch, Reason} -> {{error, Reason}, Tree};
-        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
+        _:Reason -> {{error, {Reason, erlang:get_stacktrace()}}, Tree}
     end.
 
 %%--------------------------------------------------------------------
@@ -109,7 +109,7 @@ insert(Key, Value, Tree = #bp_tree{order = Order}) ->
         end
     catch
         _:{badmatch, Reason} -> {{error, Reason}, Tree};
-        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
+        _:Reason -> {{error, {Reason, erlang:get_stacktrace()}}, Tree}
     end.
 
 %%--------------------------------------------------------------------
@@ -125,7 +125,7 @@ remove(Key, Tree = #bp_tree{}) ->
         remove(Key, Path, ?NIL, Tree3)
     catch
         _:{badmatch, Reason} -> {{error, Reason}, Tree};
-        _:Reason -> {{error, Reason, erlang:get_stacktrace()}, Tree}
+        _:Reason -> {{error, {Reason, erlang:get_stacktrace()}}, Tree}
     end.
 
 %%--------------------------------------------------------------------
