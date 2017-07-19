@@ -153,7 +153,7 @@ fold({offset, Offset}, Fun, Acc, Tree) ->
             {{error, Reason}, Tree2}
     end;
 fold({start_key, Key}, Fun, Acc, Tree) ->
-    case bp_tree_leaf:find(Key, Tree) of
+    case bp_tree_leaf:lower_bound(Key, Tree) of
         {{ok, Pos, Node}, Tree2} ->
             {{ok, fold_node(Pos, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
