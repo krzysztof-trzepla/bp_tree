@@ -23,7 +23,7 @@
 -export([get/2, update/3, remove/2, remove/3]).
 -export([find/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
--export([to_list/1, from_list/1]).
+-export([to_list/1, from_list/1, to_map/1, from_map/1]).
 
 -record(bp_tree_array, {
     size,
@@ -288,6 +288,39 @@ from_list(List) ->
         data = list_to_tuple(List)
     }.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts an array into a map.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_map(array()) -> #{key() => value()}.
+to_map(Array = #bp_tree_array{}) ->
+    List = to_list(Array),
+    to_map(List, #{?SIZE_KEY => length(List)}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts a map into an array.
+%% @end
+%%--------------------------------------------------------------------
+-spec from_map(#{key() => value()}) -> array().
+from_map(Map) ->
+    Size = maps:get(?SIZE_KEY, Map),
+    List = maps:fold(fun
+        (?LAST_KEY, _, Acc) -> Acc;
+        (?SIZE_KEY, _, Acc) -> Acc;
+        (Key, Value, Acc) -> [{Key, Value} | Acc]
+    end, [], Map),
+    List2 = lists:sort(List),
+    List3 = lists:foldl(fun({Key, Value}, Acc) ->
+        [Key, Value | Acc]
+    end, [], List2),
+    List4 = [maps:get(?LAST_KEY, Map, ?NIL) | List3],
+    List5 = lists:foldl(fun(_, Acc) ->
+        [?NIL | Acc]
+    end, List4, lists:seq(1, Size - length(List4))),
+    from_list(lists:reverse(List5)).
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -344,3 +377,23 @@ shift_right(Begin, Array = #bp_tree_array{size = Size, data = Data}) ->
         size = Size + 1,
         data = Data3
     }.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts list format of an array into a map.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_map(list(), maps:map()) -> maps:map().
+to_map([], Map) ->
+    Map;
+to_map([?NIL], Map) ->
+    Map;
+to_map([Value], Map) ->
+    Map#{?LAST_KEY => Value};
+to_map([?NIL, ?NIL | _], Map) ->
+    Map;
+to_map([Value, ?NIL | _], Map) ->
+    Map#{?LAST_KEY => Value};
+to_map([Value, Key | List], Map) ->
+    to_map(List, maps:put(Key, Value, Map)).

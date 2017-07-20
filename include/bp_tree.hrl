@@ -13,6 +13,8 @@
 -define(BP_TREE_HRL, 1).
 
 -define(NIL, null).
+-define(LAST_KEY, <<"_last">>).
+-define(SIZE_KEY, <<"_size">>).
 
 -record(bp_tree, {
     order :: bp_tree:order(),

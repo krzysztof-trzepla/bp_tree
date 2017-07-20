@@ -16,7 +16,8 @@
 
 -define(K, ?K(1)).
 -define(K(N), <<"key-", (integer_to_binary(N))/binary>>).
--define(V, <<"value">>).
+-define(V, ?V(1)).
+-define(V(N), <<"value-", (integer_to_binary(N))/binary>>).
 
 insert_should_return_out_of_space_error_test() ->
     A = bp_tree_array:new(0),
@@ -191,3 +192,51 @@ from_list_should_succeed_test() ->
     {ok, A2} = bp_tree_array:insert({left, ?K(1)}, ?V, A),
     {ok, A3} = bp_tree_array:insert({left, ?K(2)}, ?V, A2),
     ?assertEqual(A3, bp_tree_array:from_list([?V, ?K(1), ?V, ?K(2), ?NIL])).
+
+to_map_should_succeed_test() ->
+    A = bp_tree_array:new(2),
+    ?assertEqual(#{
+        ?SIZE_KEY => 5
+    }, bp_tree_array:to_map(A)),
+    {ok, A2} = bp_tree_array:insert({left, ?K(1)}, ?V(1), A),
+    ?assertEqual(#{
+        ?SIZE_KEY => 5,
+        ?K(1) => ?V(1)
+    }, bp_tree_array:to_map(A2)),
+    {ok, A3} = bp_tree_array:insert({left, ?K(2)}, ?V(2), A2),
+    ?assertEqual(#{
+        ?SIZE_KEY => 5,
+        ?K(1) => ?V(1),
+        ?K(2) => ?V(2)
+    }, bp_tree_array:to_map(A3)),
+    {ok, A4} = bp_tree_array:update({right, last}, ?V(3), A3),
+    ?assertEqual(#{
+        ?SIZE_KEY => 5,
+        ?K(1) => ?V(1),
+        ?K(2) => ?V(2),
+        ?LAST_KEY => ?V(3)
+    }, bp_tree_array:to_map(A4)).
+
+from_map_should_succeed_test() ->
+    A = bp_tree_array:new(2),
+    ?assertEqual(A, bp_tree_array:from_map(#{
+        ?SIZE_KEY => 5
+    })),
+    {ok, A2} = bp_tree_array:insert({left, ?K(1)}, ?V(1), A),
+    ?assertEqual(A2, bp_tree_array:from_map(#{
+        ?SIZE_KEY => 5,
+        ?K(1) => ?V(1)
+    })),
+    {ok, A3} = bp_tree_array:insert({left, ?K(2)}, ?V(2), A2),
+    ?assertEqual(A3, bp_tree_array:from_map(#{
+        ?SIZE_KEY => 5,
+        ?K(2) => ?V(2),
+        ?K(1) => ?V(1)
+    })),
+    {ok, A4} = bp_tree_array:update({right, last}, ?V(3), A3),
+    ?assertEqual(A4, bp_tree_array:from_map(#{
+        ?SIZE_KEY => 5,
+        ?LAST_KEY => ?V(3),
+        ?K(2) => ?V(2),
+        ?K(1) => ?V(1)
+    })).
