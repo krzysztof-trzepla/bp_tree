@@ -20,7 +20,7 @@
 -export([child/2, child_with_sibling/2, child_with_right_sibling/2]).
 -export([leftmost_child/1]).
 -export([find/2, find_pos/2, lower_bound/2]).
--export([insert/3, remove/2, merge/3, split/1]).
+-export([insert/3, remove/3, merge/3, split/1]).
 -export([rotate_right/3, rotate_left/3, replace_key/3]).
 
 -type id() :: any().
@@ -236,14 +236,14 @@ insert(Key, Value, Node = #bp_tree_node{leaf = false, children = Children}) ->
 %% Removes key and associated value from a node.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(bp_tree:key(), bp_tree:tree_node()) ->
+-spec remove(bp_tree:key(), bp_tree:remove_pred(), bp_tree:tree_node()) ->
     {ok, bp_tree:tree_node()} | {error, term()}.
-remove(Key, Node = #bp_tree_node{leaf = true, children = Children}) ->
-    case bp_tree_array:remove({left, Key}, Children) of
+remove(Key, Pred, Node = #bp_tree_node{leaf = true, children = Children}) ->
+    case bp_tree_array:remove({left, Key}, Pred, Children) of
         {ok, Children2} -> {ok, Node#bp_tree_node{children = Children2}};
         {error, Reason} -> {error, Reason}
     end;
-remove(Key, Node = #bp_tree_node{leaf = false, children = Children}) ->
+remove(Key, _Pred, Node = #bp_tree_node{leaf = false, children = Children}) ->
     case bp_tree_array:remove({right, Key}, Children) of
         {ok, Children2} -> {ok, Node#bp_tree_node{children = Children2}};
         {error, Reason} -> {error, Reason}

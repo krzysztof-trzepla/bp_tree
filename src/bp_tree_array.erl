@@ -20,7 +20,7 @@
 
 %% API exports
 -export([new/1, size/1]).
--export([get/2, update/3, remove/2]).
+-export([get/2, update/3, remove/2, remove/3]).
 -export([find/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
 -export([to_list/1, from_list/1]).
@@ -34,6 +34,7 @@
 -type value() :: any().
 -type selector() :: key | left | right | both.
 -type pos() :: non_neg_integer() | first | last.
+-type remove_pred() :: fun((value()) -> boolean()).
 -opaque array() :: #bp_tree_array{}.
 
 -export_type([array/0, selector/0]).
@@ -202,12 +203,29 @@ prepend({Selector, Key}, Value, Array = #bp_tree_array{}) ->
 %% Removes a key and associated value from an array.
 %% @end
 %%--------------------------------------------------------------------
--spec remove({selector(), key()}, array()) -> {ok, array()} | {error, term()}.
+-spec remove({selector(), key()}, array()) ->
+    {ok, array()} | {error, term()}.
 remove({Selector, Key}, Array = #bp_tree_array{}) ->
+    remove({Selector, Key}, fun(_) -> true end, Array).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a key and associated value from an array if predicate is satisfied.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove({selector(), key()}, remove_pred(), array()) ->
+    {ok, array()} | {error, term()}.
+remove({Selector, Key}, Pred, Array = #bp_tree_array{}) ->
     case find(Key, Array) of
-        {ok, Pos} when Selector =:= left -> {ok, shift_left(Pos, 0, Array)};
-        {ok, Pos} when Selector =:= right -> {ok, shift_left(Pos, 1, Array)};
-        {error, Reason} -> {error, Reason}
+        {ok, Pos} ->
+            {ok, Value} = get({Selector, Pos}, Array),
+            case Pred(Value) of
+                true when Selector =:= left -> {ok, shift_left(Pos, 0, Array)};
+                true when Selector =:= right -> {ok, shift_left(Pos, 1, Array)};
+                false -> {error, predicate_not_satified}
+            end;
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
