@@ -49,6 +49,11 @@ new_should_use_custom_options_test_() ->
         ]))
     }.
 
+
+find_should_return_not_found_error_test() ->
+    {ok, Tree} = bp_tree:init([]),
+    {{error, not_found}, Tree} = bp_tree:find(<<"someKey">>, Tree).
+
 insert_find_permutation_should_succeed_test() ->
     lists:foreach(fun(Seq) ->
         {ok, Tree} = bp_tree:init([{order, 1}]),

@@ -85,7 +85,7 @@ find(Key, Tree = #bp_tree{}) ->
         {[{_, Leaf} | _], Tree3} = bp_tree_path:find(Key, RootId, Tree2),
         {bp_tree_node:find(Key, Leaf), Tree3}
     catch
-        _:Error -> {handle_exception(Error, erlang:get_stacktrace()), Tree}
+        _:Error -> handle_exception(Error, erlang:get_stacktrace(), Tree)
     end.
 
 %%--------------------------------------------------------------------
@@ -109,7 +109,7 @@ insert(Key, Value, Tree = #bp_tree{order = Order}) ->
                 insert(Key, Value, Path, Tree5)
         end
     catch
-        _:Error -> {handle_exception(Error, erlang:get_stacktrace()), Tree}
+        _:Error -> handle_exception(Error, erlang:get_stacktrace(), Tree)
     end.
 
 %%--------------------------------------------------------------------
@@ -134,7 +134,7 @@ remove(Key, Predicate, Tree = #bp_tree{}) ->
         {Path, Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
         remove(Key, Predicate, Path, ?NIL, Tree3)
     catch
-        _:Error -> {handle_exception(Error, erlang:get_stacktrace()), Tree}
+        _:Error -> handle_exception(Error, erlang:get_stacktrace(), Tree)
     end.
 
 %%--------------------------------------------------------------------
@@ -315,11 +315,13 @@ fold_node(Pos, Node, Fun, Acc) ->
 %% Handles exceptions.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_exception(term(), [erlang:stack_item()]) ->
-    error() | error_stacktrace().
-handle_exception({badmatch, {error, Reason}}, _Stacktrace) ->
-    {error, Reason};
-handle_exception({badmatch, Reason}, _Stacktrace) ->
-    {error, Reason};
-handle_exception(Reason, Stacktrace) ->
-    {error, {Reason, Stacktrace}}.
+-spec handle_exception(term(), [erlang:stack_item()], tree()) ->
+    {error() | error_stacktrace(), tree()}.
+handle_exception({badmatch, {{error, Reason}, Tree = #bp_tree{}}}, _, _) ->
+    {{error, Reason}, Tree};
+handle_exception({badmatch, {error, Reason}}, _, Tree) ->
+    {{error, Reason}, Tree};
+handle_exception({badmatch, Reason}, _, Tree) ->
+    {{error, Reason}, Tree};
+handle_exception(Reason, Stacktrace, Tree) ->
+    {{error, {Reason, Stacktrace}}, Tree}.
