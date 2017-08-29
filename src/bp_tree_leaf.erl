@@ -149,8 +149,12 @@ find_next_in_leaf(Key, Node, Tree, Path) ->
                 [] ->
                     {{error, not_found}, Tree};
                 [SNodeId | _] ->
-                    {{ok, _, NextNode}, Tree2} = find_leftmost(SNodeId, Tree),
-                    {{ok, 1, NextNode}, Tree2}
+                    case find_leftmost(SNodeId, Tree) of
+                        {{ok, _, NextNode}, Tree2} ->
+                            {{ok, 1, NextNode}, Tree2};
+                        {{error, Reason}, Tree2} ->
+                            {{error, Reason}, Tree2}
+                    end
             end
     end.
 
@@ -204,8 +208,12 @@ lower_bound(Key, NodeId, Tree) ->
 %%--------------------------------------------------------------------
 -spec find_leftmost(bp_tree_node:id(), bp_tree:tree()) -> find_node_result().
 find_leftmost(NodeId, Tree) ->
-    {{ok, Node}, Tree2} = bp_tree_store:get_node(NodeId, Tree),
-    case bp_tree_node:leftmost_child(Node) of
-        {ok, NodeId2} -> find_leftmost(NodeId2, Tree2);
-        {error, not_found} -> {{ok, NodeId, Node}, Tree2}
+    case bp_tree_store:get_node(NodeId, Tree) of
+        {{ok, Node}, Tree2} ->
+            case bp_tree_node:leftmost_child(Node) of
+                {ok, NodeId2} -> find_leftmost(NodeId2, Tree2);
+                {error, not_found} -> {{ok, NodeId, Node}, Tree2}
+            end;
+        {{error, Reason}, Tree2} ->
+            {{error, Reason}, Tree2}
     end.
