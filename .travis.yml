@@ -1,4 +1,5 @@
 language: erlang
 otp_release:
   - 19.3
+install: "make upgrade"
 script: "make compile dialyzer test cover doc"

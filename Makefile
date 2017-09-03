@@ -9,6 +9,10 @@ all: compile
 compile:
 	./rebar3 compile
 
+.PHONY: upgrade
+upgrade:
+	./rebar3 upgrade
+
 .PHONY: clean
 clean:
 	./rebar3 clean
