@@ -31,6 +31,7 @@
                      {offset, non_neg_integer()}.
 -type fold_acc() :: any().
 -type fold_fun() :: fun((key(), value(), fold_acc()) -> fold_acc()).
+-type fold_next_node_id() :: bp_tree_node:id() | undefined.
 -type error() :: {error, term()}.
 -type error_stacktrace() :: {error, {term(), [erlang:stack_item()]}}.
 
@@ -153,7 +154,14 @@ fold(Fun, Acc, Tree) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec fold(fold_init(), fold_fun(), fold_acc(), tree()) ->
-    {{ok, fold_acc()} | error(), tree()}.
+    {{ok, {fold_acc(), fold_next_node_id()}} | error(), tree()}.
+fold({node_id, NodeId}, Fun, Acc, Tree) ->
+    case bp_tree_store:get_node(NodeId, Tree) of
+        {{ok, Node}, Tree2} ->
+            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2};
+        {{error, Reason}, Tree2} ->
+            {{error, Reason}, Tree2}
+    end;
 fold({offset, Offset}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_offset(Offset, Tree) of
         {{ok, Pos, Node}, Tree2} ->
@@ -299,14 +307,17 @@ rebalance_node(Key, NodeId, Node, ParentKey, SNodeId, Path, Tree = #bp_tree{
 %% @end
 %%--------------------------------------------------------------------
 -spec fold_node(pos_integer(), tree_node(), fold_fun(), fold_acc()) ->
-    fold_acc().
+    {fold_acc(), fold_next_node_id()}.
 fold_node(Pos, Node, Fun, Acc) ->
     case {bp_tree_node:key(Pos, Node), bp_tree_node:value(Pos, Node)} of
         {{ok, Key}, {ok, Value}} ->
             Acc2 = Fun(Key, Value, Acc),
             fold_node(Pos + 1, Node, Fun, Acc2);
         {{error, out_of_range}, {error, out_of_range}} ->
-            Acc
+            case bp_tree_node:right_sibling(Node) of
+                {ok, NodeId} -> {Acc, NodeId};
+                {error, not_found} -> {Acc, undefined}
+            end
     end.
 
 %%--------------------------------------------------------------------

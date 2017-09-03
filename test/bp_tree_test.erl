@@ -184,7 +184,8 @@ remove_and_fold([X | Seq], Tree) ->
 
 fold(Arg, Fun, Acc, Tree) ->
     case bp_tree:fold(Arg, Fun, Acc, Tree) of
-        {{ok, [K | _] = Acc2}, Tree2} -> fold({prev_key, K}, Fun, Acc2, Tree2);
+        {{ok, {Acc2, undefined}}, Tree2} -> {ok, lists:reverse(Acc2), Tree2};
+        {{ok, {Acc2, N}}, Tree2} -> fold({node_id, N}, Fun, Acc2, Tree2);
         {{error, not_found}, Tree2} -> {ok, lists:reverse(Acc), Tree2};
         {{error, Reason}, Tree2} -> {{error, Reason}, Tree2}
     end.
