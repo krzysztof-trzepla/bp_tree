@@ -19,7 +19,7 @@
 -export([right_sibling/1, set_right_sibling/2]).
 -export([child/2, child_with_sibling/2, child_with_right_sibling/2]).
 -export([leftmost_child/1]).
--export([find/2, find_pos/2, lower_bound/2]).
+-export([find/2, find_pos/2, lower_bound/2, left_sibling/2]).
 -export([insert/3, remove/3, merge/3, split/1]).
 -export([rotate_right/3, rotate_left/3, replace_key/3]).
 
@@ -139,6 +139,18 @@ child_with_right_sibling(Key, #bp_tree_node{leaf = false, children = Children}) 
             {ok, NodeId} = bp_tree_array:get({right, last}, Children),
             {ok, NodeId, ?NIL}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns left sibling on path from a root to a leaf
+%% associated with a key.
+%% @end
+%%--------------------------------------------------------------------
+-spec left_sibling(bp_tree:key(), bp_tree:tree_node()) ->
+    {ok, bp_tree_node:id()} | {error, out_of_range}.
+left_sibling(Key, #bp_tree_node{leaf = false, children = Children}) ->
+    Pos = bp_tree_array:lower_bound(Key, Children) - 2,
+    bp_tree_array:get({left, Pos}, Children).
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -254,6 +254,7 @@ remove(Key, Pred, [{{NodeId, Node}, ParentKey, SNodeId} | Path], _,
 -spec split_node(bp_tree_node:id(), tree_node(), tree()) ->
     {{key(), bp_tree_node:id()}, tree()}.
 split_node(NodeId, Node, Tree) ->
+    % TODO - new document?
     {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
     {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
     LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
@@ -275,29 +276,155 @@ rebalance_node(Key, NodeId, Node, ParentKey, SNodeId, Path, Tree = #bp_tree{
     {{ok, SNode}, Tree2} = bp_tree_store:get_node(SNodeId, Tree),
     case bp_tree_node:size(SNode) > Order of
         true when Key =< ParentKey ->
-            {Node2, ParentKey2, SNode2} = bp_tree_node:rotate_left(Node, ParentKey, SNode),
-            [{{PNodeId, PNode}, _, _} | _] = Path,
-            {ok, PNode2} = bp_tree_node:replace_key(ParentKey, ParentKey2, PNode),
-            {ok, Tree3} = bp_tree_store:update_node(SNodeId, SNode2, Tree2),
-            {ok, Tree4} = bp_tree_store:update_node(PNodeId, PNode2, Tree3),
-            {ok, _Tree5} = bp_tree_store:update_node(NodeId, Node2, Tree4);
+            {NewPath, NewNodeId, Node2, Tree3} = rotate_nodes(Node, SNode,
+                NodeId, SNodeId, ParentKey, Tree2, Path, left),
+            Tree4 = update_sibling_smaller_key(NewPath, NewNodeId, Key, Tree3,
+                NewNodeId, Node2#bp_tree_node.leaf),
+            {ok, Tree4};
         true ->
-            {SNode2, ParentKey2, Node2} = bp_tree_node:rotate_right(SNode, ParentKey, Node),
-            [{{PNodeId, PNode}, _, _} | _] = Path,
-            {ok, PNode2} = bp_tree_node:replace_key(ParentKey, ParentKey2, PNode),
-            {ok, Tree3} = bp_tree_store:update_node(SNodeId, SNode2, Tree2),
-            {ok, Tree4} = bp_tree_store:update_node(PNodeId, PNode2, Tree3),
-            {ok, _Tree5} = bp_tree_store:update_node(NodeId, Node2, Tree4);
+            {NewPath, NewNodeId, Node2, Tree3} = rotate_nodes(SNode, Node,
+                SNodeId, NodeId, ParentKey, Tree2, Path, right),
+            Tree4 = update_sibling_greater_key(NewPath, NewNodeId, Key, Tree3,
+                NewNodeId, Node2#bp_tree_node.leaf),
+            {ok, Tree4};
         false when Key =< ParentKey ->
-            Node2 = bp_tree_node:merge(Node, ParentKey, SNode),
-            {ok, Tree3} = bp_tree_store:delete_node(SNodeId, Tree2),
-            {ok, Tree4} = bp_tree_store:update_node(NodeId, Node2, Tree3),
-            remove(ParentKey, fun(_) -> true end, Path, NodeId, Tree4);
+            {NewPath, NewNodeId, Node2, Tree3} =
+                merge_nodes(Node, SNode, NodeId, SNodeId, ParentKey, Tree2, Path),
+            Tree4 = update_sibling_smaller_key(NewPath, NewNodeId, Key, Tree3,
+                NewNodeId, Node2#bp_tree_node.leaf),
+            remove(ParentKey, fun(_) -> true end, NewPath, NewNodeId, Tree4);
         false ->
-            SNode2 = bp_tree_node:merge(SNode, ParentKey, Node),
-            {ok, Tree3} = bp_tree_store:delete_node(NodeId, Tree2),
-            {ok, Tree4} = bp_tree_store:update_node(SNodeId, SNode2, Tree3),
-            remove(ParentKey, fun(_) -> true end, Path, SNodeId, Tree4)
+            {NewPath, NewNodeId, Node2, Tree3} =
+                merge_nodes(SNode, Node, SNodeId, NodeId, ParentKey, Tree2, Path),
+            Tree4 = update_sibling_greater_key(NewPath, NewNodeId, Key, Tree3,
+                NewNodeId, Node2#bp_tree_node.leaf),
+            remove(ParentKey, fun(_) -> true end, NewPath, NewNodeId, Tree4)
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Merges two nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec merge_nodes(tree_node(), tree_node(), bp_tree_node:id(), bp_tree_node:id(),
+    key(), tree(), bp_tree_path:path_with_sibling()) ->
+    {bp_tree_path:path_with_sibling(), bp_tree_node:id(), tree_node(), tree()}.
+merge_nodes(Node, SNode, NodeId, SNodeId, ParentKey, Tree, Path) ->
+    Node2 = bp_tree_node:merge(Node, ParentKey, SNode),
+    {{ok, NewNodeId}, Tree2} = bp_tree_store:create_node(Node2, Tree),
+    [{{PNodeId, PNode}, P1, P2} | PathTail] = Path,
+    {ok, PNode2} = bp_tree_node:remove(ParentKey, fun(_) -> true end, PNode),
+    {ok, PNode3} = bp_tree_node:insert(ParentKey, {NewNodeId, SNodeId}, PNode2),
+    {ok, Tree3} = bp_tree_store:update_node(PNodeId, PNode3, Tree2),
+    {ok, Tree4} = bp_tree_store:delete_node(SNodeId, Tree3),
+    {ok, Tree5} = bp_tree_store:delete_node(NodeId, Tree4),
+    NewPath = [{{PNodeId, PNode3}, P1, P2} | PathTail],
+    {NewPath, NewNodeId, Node2, Tree5}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Rotates two nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec rotate_nodes(tree_node(), tree_node(), bp_tree_node:id(), bp_tree_node:id(),
+    key(), tree(), bp_tree_path:path_with_sibling(), left | right) ->
+    {bp_tree_path:path_with_sibling(), bp_tree_node:id(), tree_node(), tree()}.
+rotate_nodes(Node, SNode, NodeId, SNodeId, ParentKey, Tree, Path, Rotation) ->
+    {Node2, ParentKey2, SNode2} = case Rotation of
+        left ->
+            bp_tree_node:rotate_left(Node, ParentKey, SNode);
+        _ ->
+            bp_tree_node:rotate_right(Node, ParentKey, SNode)
+    end,
+    {{ok, NewSNodeId}, Tree2} = bp_tree_store:create_node(SNode2, Tree),
+    Node3 = case Node2#bp_tree_node.leaf of
+        true ->
+            bp_tree_node:set_right_sibling(NewSNodeId, Node2);
+        _ ->
+            Node2
+    end,
+    {{ok, NewNodeId}, Tree3} = bp_tree_store:create_node(Node3, Tree2),
+
+    [{{PNodeId, PNode}, P1, P2} | PathTail] = Path,
+    {ok, PNode2} = bp_tree_node:remove(ParentKey, fun(_) -> true end, PNode),
+    {ok, PNode3} = bp_tree_node:insert(ParentKey2, {NewNodeId, NewSNodeId}, PNode2),
+    {ok, Tree4} = bp_tree_store:update_node(PNodeId, PNode3, Tree3),
+
+    {ok, Tree5} = bp_tree_store:delete_node(SNodeId, Tree4),
+    {ok, Tree6} = bp_tree_store:delete_node(NodeId, Tree5),
+
+    NewPath = [{{PNodeId, PNode3}, P1, P2} | PathTail],
+    {NewPath, NewNodeId, Node2, Tree6}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Finds node left to the chosen one and set right sibling in this node.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_sibling_greater_key(bp_tree_path:path_with_sibling(),
+    bp_tree_node:id(), key(), tree(), bp_tree_node:id(), boolean()) -> tree().
+update_sibling_greater_key(_Path, _CheckID, _Key, Tree, _ToSet, false) ->
+    Tree;
+update_sibling_greater_key([{{NodeID, Node}, _, _} | PathTail], CheckID, Key,
+    Tree, ToSet, IdLeaf) ->
+    {ok, NextID} = bp_tree_node:leftmost_child(Node),
+    case NextID of
+        CheckID ->
+            update_sibling_smaller_key(PathTail, NodeID, Key, Tree, ToSet, IdLeaf);
+        _ ->
+            case bp_tree_node:left_sibling(Key, Node) of
+                {ok, NewNodeID} ->
+                    {{ok, NewNode}, Tree2} = bp_tree_store:get_node(NewNodeID, Tree),
+                    update_sibling(Key, NewNodeID, NewNode, Tree2, ToSet);
+                _ ->
+                    Tree
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Finds node left to the chosen one and set right sibling in this node.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_sibling_smaller_key(bp_tree_path:path_with_sibling(),
+    bp_tree_node:id(), key(), tree(), bp_tree_node:id(), boolean()) -> tree().
+update_sibling_smaller_key(_Path, _CheckID, _Key, Tree, _ToSet, false) ->
+    Tree;
+update_sibling_smaller_key([], _CheckID, _Key, Tree, _ToSet, _IdLeaf) ->
+    Tree;
+update_sibling_smaller_key([{{NodeID, Node}, _, _} | PathTail], CheckID, Key,
+    Tree, ToSet, IdLeaf) ->
+    {ok, NextID} = bp_tree_node:leftmost_child(Node),
+    case NextID of
+        CheckID ->
+            update_sibling_smaller_key(PathTail, NodeID, Key, Tree, ToSet, IdLeaf);
+        _ ->
+            {ok, NewNodeID, _, _} = bp_tree_node:child_with_sibling(Key, Node),
+            {{ok, NewNode}, Tree2} = bp_tree_store:get_node(NewNodeID, Tree),
+            update_sibling(Key, NewNodeID, NewNode, Tree2, ToSet)
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Finds node left to the chosen one and set right sibling in this node.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_sibling(key(), bp_tree_node:id(), tree_node(), tree(),
+    bp_tree_node:id()) -> tree().
+update_sibling(Key, NodeID, Node, Tree, ToSet) ->
+    case bp_tree_node:child(Key, Node) of
+        {ok, NewID} ->
+            {{ok, NewNode}, Tree2} = bp_tree_store:get_node(NewID, Tree),
+            update_sibling(Key, NewID, NewNode, Tree2, ToSet);
+        {error, not_found} ->
+            UpdatedNode = bp_tree_node:set_right_sibling(ToSet, Node),
+            {ok, Tree2} = bp_tree_store:update_node(NodeID, UpdatedNode, Tree),
+            Tree2
     end.
 
 %%--------------------------------------------------------------------
