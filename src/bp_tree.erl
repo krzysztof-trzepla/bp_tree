@@ -100,13 +100,13 @@ insert(Key, Value, Tree = #bp_tree{order = Order}) ->
     try
         case bp_tree_store:get_root_id(Tree) of
             {{ok, RootId}, Tree2} ->
-                {Path, Tree3} = bp_tree_path:find(Key, RootId, Tree2),
+                {Path, Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
                 insert(Key, Value, Path, Tree3);
             {{error, not_found}, Tree2} ->
                 Root = bp_tree_node:new(Order, true),
                 {{ok, RootId}, Tree3} = bp_tree_store:create_node(Root, Tree2),
                 {ok, Tree4} = bp_tree_store:set_root_id(RootId, Tree3),
-                {Path, Tree5} = bp_tree_path:find(Key, RootId, Tree4),
+                {Path, Tree5} = bp_tree_path:find_with_sibling(Key, RootId, Tree4),
                 insert(Key, Value, Path, Tree5)
         end
     catch
@@ -196,19 +196,20 @@ fold({prev_key, Key}, Fun, Acc, Tree) ->
 %% pair into next node on path.
 %% @end
 %%--------------------------------------------------------------------
--spec insert(key(), value(), bp_tree_path:path(), tree()) ->
+-spec insert(key(), value(), bp_tree_path:path_with_sibling(), tree()) ->
     {ok | error(), tree()}.
 insert(Key, Value, [], Tree = #bp_tree{order = Order}) ->
     Root = bp_tree_node:new(Order, false),
     {ok, Root2} = bp_tree_node:insert(Key, Value, Root),
     {{ok, RootId}, Tree2} = bp_tree_store:create_node(Root2, Tree),
     bp_tree_store:set_root_id(RootId, Tree2);
-insert(Key, Value, [{NodeId, Node} | Path], Tree = #bp_tree{order = Order}) ->
+insert(Key, Value, [{{NodeId, Node}, _, _} | Path], Tree = #bp_tree{order = Order}) ->
     {ok, Node2} = bp_tree_node:insert(Key, Value, Node),
     case bp_tree_node:size(Node2) > 2 * Order of
         true ->
-            {{Key2, RNodeId}, Tree2} = split_node(NodeId, Node2, Tree),
-            insert(Key2, {NodeId, RNodeId}, Path, Tree2);
+            {{Key2, NewNodeId, RNodeId}, Tree2} =
+                split_node(NodeId, Node2, Tree, Path),
+            insert(Key2, {NewNodeId, RNodeId}, Path, Tree2);
         false ->
             bp_tree_store:update_node(NodeId, Node2, Tree)
     end.
@@ -251,15 +252,28 @@ remove(Key, Pred, [{{NodeId, Node}, ParentKey, SNodeId} | Path], _,
 %% Splits node in half.
 %% @end
 %%--------------------------------------------------------------------
--spec split_node(bp_tree_node:id(), tree_node(), tree()) ->
-    {{key(), bp_tree_node:id()}, tree()}.
-split_node(NodeId, Node, Tree) ->
-    % TODO - new document?
+-spec split_node(bp_tree_node:id(), tree_node(), tree(),
+    bp_tree_path:path_with_sibling()) ->
+    {{key(), bp_tree_node:id(), bp_tree_node:id()}, tree()}.
+split_node(NodeId, Node, Tree, []) ->
     {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
     {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
     LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
     {ok, Tree3} = bp_tree_store:update_node(NodeId, LNode2, Tree2),
-    {{Key2, RNodeId}, Tree3}.
+    {{Key2, NodeId, RNodeId}, Tree3};
+split_node(NodeId, Node, Tree, [{{PNodeId, PNode}, P1, P2} | PathTail]) ->
+    {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
+    {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
+    LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
+    {{ok, NewNodeId}, Tree3} = bp_tree_store:create_node(LNode2, Tree2),
+    {ok, Tree4} = bp_tree_store:delete_node(NodeId, Tree3),
+
+    {ok, PNode2} = bp_tree_node:insert(Key2, {NewNodeId, RNodeId}, PNode),
+    NewPath = [{{PNodeId, PNode2}, P1, P2} | PathTail],
+    Tree5 = update_sibling_smaller_key(NewPath, NewNodeId, Key2, Tree4,
+      NewNodeId, LNode2#bp_tree_node.leaf),
+
+    {{Key2, NewNodeId, RNodeId}, Tree5}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -310,10 +324,10 @@ rebalance_node(Key, NodeId, Node, ParentKey, SNodeId, Path, Tree = #bp_tree{
 -spec merge_nodes(tree_node(), tree_node(), bp_tree_node:id(), bp_tree_node:id(),
     key(), tree(), bp_tree_path:path_with_sibling()) ->
     {bp_tree_path:path_with_sibling(), bp_tree_node:id(), tree_node(), tree()}.
-merge_nodes(Node, SNode, NodeId, SNodeId, ParentKey, Tree, Path) ->
+merge_nodes(Node, SNode, NodeId, SNodeId, ParentKey, Tree,
+    [{{PNodeId, PNode}, P1, P2} | PathTail]) ->
     Node2 = bp_tree_node:merge(Node, ParentKey, SNode),
     {{ok, NewNodeId}, Tree2} = bp_tree_store:create_node(Node2, Tree),
-    [{{PNodeId, PNode}, P1, P2} | PathTail] = Path,
     {ok, PNode2} = bp_tree_node:remove(ParentKey, fun(_) -> true end, PNode),
     {ok, PNode3} = bp_tree_node:insert(ParentKey, {NewNodeId, SNodeId}, PNode2),
     {ok, Tree3} = bp_tree_store:update_node(PNodeId, PNode3, Tree2),
