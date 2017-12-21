@@ -259,8 +259,9 @@ split_node(NodeId, Node, Tree, []) ->
     {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
     {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
     LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
-    {ok, Tree3} = bp_tree_store:update_node(NodeId, LNode2, Tree2),
-    {{Key2, NodeId, RNodeId}, Tree3};
+    {{ok, NewNodeId}, Tree3} = bp_tree_store:create_node(LNode2, Tree2),
+    {ok, Tree4} = bp_tree_store:delete_node(NodeId, Tree3),
+    {{Key2, NewNodeId, RNodeId}, Tree4};
 split_node(NodeId, Node, Tree, [{{PNodeId, PNode}, P1, P2} | PathTail]) ->
     {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
     {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
