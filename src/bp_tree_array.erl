@@ -222,7 +222,7 @@ remove({Selector, Key}, Pred, Array = #bp_tree_array{}) ->
             case Pred(Value) of
                 true when Selector =:= left -> {ok, shift_left(Pos, 0, Array)};
                 true when Selector =:= right -> {ok, shift_left(Pos, 1, Array)};
-                false -> {error, predicate_not_satified}
+                false -> {error, predicate_not_satisfied}
             end;
         {error, Reason} ->
             {error, Reason}
