@@ -203,7 +203,7 @@ fold(Arg, Fun, Acc, Tree) ->
     end.
 
 fold_and_check_prev_nodes(Arg, Fun, Acc, Tree0, PrevNode) ->
-    {PrevNode2, Tree} = check_prev_node(PrevNode, Tree0, Arg),
+    {PrevNode2, Tree} = check_prev_node(PrevNode, Tree0, Arg, Acc),
     case bp_tree:fold(Arg, Fun, Acc, Tree) of
         {{ok, {Acc2, undefined}}, Tree2} -> {ok, lists:reverse(Acc2), Tree2};
         {{ok, {Acc2, N}}, Tree2} -> fold_and_check_prev_nodes({node_id, N},
@@ -212,18 +212,26 @@ fold_and_check_prev_nodes(Arg, Fun, Acc, Tree0, PrevNode) ->
         {{error, Reason}, Tree2} -> {{error, Reason}, Tree2}
     end.
 
-check_prev_node(PrevNode, Tree, {start_key, Key}) ->
+check_prev_node(PrevNode, Tree, {start_key, Key}, Acc) ->
     {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
     {[{NodeID, _Leaf} | _], Tree3} = bp_tree_path:find(Key, RootId, Tree2),
-    check_prev_node(PrevNode, Tree3, {node_id, NodeID});
-check_prev_node(PrevNode, Tree, {node_id, N}) ->
-    Tree2 = assert_prev_node(N, PrevNode, Tree),
+    check_prev_node(PrevNode, Tree3, {node_id, NodeID}, Acc);
+check_prev_node(PrevNode, Tree, {node_id, N}, Acc) ->
+    Tree2 = assert_prev_node(N, PrevNode, Tree, Acc),
     {N, Tree2}.
 
-assert_prev_node(CurrentNode, PrevNode, Tree) ->
-    {PrevNodeID, _, Tree2} = bp_tree:get_prev_leaf(CurrentNode, Tree),
+assert_prev_node(CurrentNode, PrevNode, Tree, Acc) ->
+    {PrevNodeID, _, Tree2} = bp_tree:get_prev_leaf({node, CurrentNode}, Tree),
     ?assertEqual(PrevNode, PrevNodeID),
-    Tree2.
+
+    case Acc of
+        [Link | _] ->
+            {PrevNodeID2, _, Tree3} = bp_tree:get_prev_leaf({key, Link + 1}, Tree2),
+            ?assertEqual(PrevNode, PrevNodeID2),
+            Tree3;
+        _ ->
+            Tree2
+    end.
 
 fold(Seq, Tree) ->
     {ok, L, Tree2} = fold({offset, 0}, fun(K, _V, A) -> [K | A] end, [], Tree),
