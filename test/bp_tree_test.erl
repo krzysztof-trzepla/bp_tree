@@ -153,6 +153,18 @@ fold_should_return_keys_from_offset_test_() ->
         end}
     end, lists:seq(0, End)).
 
+prev_node_test() ->
+    {ok, Tree} = bp_tree:init([{order, 1}]),
+    Start = 1,
+    End = 100,
+    Seq = lists:seq(Start, End),
+    RandomSeq = random_shuffle(Seq),
+    Tree2 = insert(RandomSeq, Tree),
+    {ok, Keys, _} = fold_and_check_prev_nodes({start_key, Start}, fun(K, _V, Acc) ->
+        [K | Acc]
+    end, [], Tree2, undefined),
+    ?assertEqual(Seq, Keys).
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -189,6 +201,29 @@ fold(Arg, Fun, Acc, Tree) ->
         {{error, not_found}, Tree2} -> {ok, lists:reverse(Acc), Tree2};
         {{error, Reason}, Tree2} -> {{error, Reason}, Tree2}
     end.
+
+fold_and_check_prev_nodes(Arg, Fun, Acc, Tree0, PrevNode) ->
+    {PrevNode2, Tree} = check_prev_node(PrevNode, Tree0, Arg),
+    case bp_tree:fold(Arg, Fun, Acc, Tree) of
+        {{ok, {Acc2, undefined}}, Tree2} -> {ok, lists:reverse(Acc2), Tree2};
+        {{ok, {Acc2, N}}, Tree2} -> fold_and_check_prev_nodes({node_id, N},
+            Fun, Acc2, Tree2, PrevNode2);
+        {{error, not_found}, Tree2} -> {ok, lists:reverse(Acc), Tree2};
+        {{error, Reason}, Tree2} -> {{error, Reason}, Tree2}
+    end.
+
+check_prev_node(PrevNode, Tree, {start_key, Key}) ->
+    {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+    {[{NodeID, _Leaf} | _], Tree3} = bp_tree_path:find(Key, RootId, Tree2),
+    check_prev_node(PrevNode, Tree3, {node_id, NodeID});
+check_prev_node(PrevNode, Tree, {node_id, N}) ->
+    Tree2 = assert_prev_node(N, PrevNode, Tree),
+    {N, Tree2}.
+
+assert_prev_node(CurrentNode, PrevNode, Tree) ->
+    {PrevNodeID, _, Tree2} = bp_tree:get_prev_leaf(CurrentNode, Tree),
+    ?assertEqual(PrevNode, PrevNodeID),
+    Tree2.
 
 fold(Seq, Tree) ->
     {ok, L, Tree2} = fold({offset, 0}, fun(K, _V, A) -> [K | A] end, [], Tree),
