@@ -16,6 +16,7 @@
 %% API exports
 -export([init/0, init/1, terminate/1]).
 -export([find/2, insert/3, remove/2, remove/3, fold/3, fold/4]).
+-export([get_prev_leaf/2]).
 
 -type key() :: term().
 -type value() :: term().
@@ -28,6 +29,8 @@
 -type remove_pred() :: fun((value()) -> boolean()).
 -type fold_init() :: {start_key, key()} |
                      {prev_key, key()} |
+                     {node_of_key, key()} |
+                     {node_prev_to_key, key()} |
                      {offset, non_neg_integer()}.
 -type fold_acc() :: any().
 -type fold_fun() :: fun((key(), value(), fold_acc()) -> fold_acc()).
@@ -176,6 +179,20 @@ fold({start_key, Key}, Fun, Acc, Tree) ->
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
+fold({node_of_key, Key}, Fun, Acc, Tree) ->
+    case bp_tree_leaf:lower_bound_node(Key, Tree) of
+        {{ok, Node}, Tree2} ->
+            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2};
+        {{error, Reason}, Tree2} ->
+            {{error, Reason}, Tree2}
+    end;
+fold({node_prev_to_key, Key}, Fun, Acc, Tree) ->
+    case get_prev_leaf({key, Key}, Tree) of
+        {_, undefined, Tree2} ->
+            {{error, first_node}, Tree2};
+        {_, Node, Tree2} ->
+            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2}
+    end;
 fold({prev_key, Key}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_next(Key, Tree) of
         {{ok, Pos, Node}, Tree2} ->
@@ -183,6 +200,21 @@ fold({prev_key, Key}, Fun, Acc, Tree) ->
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Gets previous leaf.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prev_leaf({node, bp_tree_node:id()} | {key, key()}, tree()) ->
+    {bp_tree_node:id() | undefined, tree_node() | undefined, tree()}.
+get_prev_leaf({node, NodeId}, Tree) ->
+    {{ok, Node}, Tree2} =  bp_tree_store:get_node(NodeId, Tree),
+    get_prev_leaf(NodeId, Node, Tree2);
+get_prev_leaf({key, Key}, Tree) ->
+    {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+    {[{{NodeId, _Node}, _, _} | Path], Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+    get_prev_leaf(Path, NodeId, Key, Tree3).
 
 %%====================================================================
 %% Internal functions
@@ -440,6 +472,58 @@ update_sibling(Key, NodeID, Node, Tree, ToSet) ->
             UpdatedNode = bp_tree_node:set_right_sibling(ToSet, Node),
             {ok, Tree2} = bp_tree_store:update_node(NodeID, UpdatedNode, Tree),
             Tree2
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Gets previous leaf.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prev_leaf(bp_tree_node:id(), tree_node(), tree()) ->
+    {bp_tree_node:id() | undefined, tree_node() | undefined, tree()}.
+get_prev_leaf(NodeId, Node, Tree) ->
+    {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+    {ok, Key} = bp_tree_node:key(1, Node),
+    {[{{NodeId, Node}, _, _} | Path], Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+    get_prev_leaf(Path, NodeId, Key, Tree3).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Gets previous node previous to leaf that contains the key.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prev_leaf(bp_tree_path:path_with_sibling(), bp_tree_node:id(), key(),
+    tree()) -> {bp_tree_node:id() | undefined, tree_node() | undefined, tree()}.
+get_prev_leaf([], _CheckID, _Key, Tree) ->
+    {undefined, undefined, Tree};
+get_prev_leaf([{{NodeID, Node}, _, _} | PathTail], CheckID, Key, Tree) ->
+    {ok, NextID} = bp_tree_node:leftmost_child(Node),
+    case NextID of
+        CheckID ->
+            get_prev_leaf(PathTail, NodeID, Key, Tree);
+        _ ->
+            {ok, NewNodeID, _, _} = bp_tree_node:child_with_sibling(Key, Node),
+            {{ok, NewNode}, Tree2} = bp_tree_store:get_node(NewNodeID, Tree),
+            get_prev_leaf_traverse_down(Key, NewNodeID, NewNode, Tree2)
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Travers down the tree to get node previous to leaf that contains the key.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prev_leaf_traverse_down(key(), bp_tree_node:id(), tree_node(), tree()) ->
+    {bp_tree_node:id(), tree_node(), tree()}.
+get_prev_leaf_traverse_down(Key, NodeID, Node, Tree) ->
+    case bp_tree_node:child(Key, Node) of
+        {ok, NewID} ->
+            {{ok, NewNode}, Tree2} = bp_tree_store:get_node(NewID, Tree),
+            get_prev_leaf_traverse_down(Key, NewID, NewNode, Tree2);
+        {error, not_found} ->
+            {NodeID, Node, Tree}
     end.
 
 %%--------------------------------------------------------------------
