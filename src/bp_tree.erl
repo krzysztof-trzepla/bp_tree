@@ -135,7 +135,7 @@ remove(Key, Tree = #bp_tree{}) ->
 remove(Key, Predicate, Tree = #bp_tree{}) ->
     try
         {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
-        {Path, Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+        {Path, Tree3} = bp_tree_path:find(Key, RootId, Tree2),
         remove(Key, Predicate, Path, ?NIL, Tree3)
     catch
         _:Error -> handle_exception(Error, erlang:get_stacktrace(), Tree)
@@ -255,7 +255,7 @@ insert(Key, Value, [{NodeId, Node} | Path], Tree = #bp_tree{order = Order}) ->
 %%--------------------------------------------------------------------
 -spec remove(key(), remove_pred(), bp_tree_path:path_with_sibling(),
     bp_tree_node:id(), tree()) -> {ok | error(), tree()}.
-remove(Key, Pred, [{{NodeId, Node}, ?NIL, ?NIL}], ChildId, Tree) ->
+remove(Key, Pred, [{NodeId, Node}], ChildId, Tree) ->
     {ok, Node2} = bp_tree_node:remove(Key, Pred, Node),
     case {bp_tree_node:size(Node2), ChildId} of
         {0, ?NIL} ->
@@ -267,6 +267,18 @@ remove(Key, Pred, [{{NodeId, Node}, ?NIL, ?NIL}], ChildId, Tree) ->
         _ ->
             bp_tree_store:update_node(NodeId, Node2, Tree)
     end;
+remove(Key, Pred, [{NodeId, Node} | _], _, Tree = #bp_tree{order = Order}) ->
+    {ok, Node2} = bp_tree_node:remove(Key, Pred, Node),
+    case bp_tree_node:size(Node2) < Order of
+        true ->
+            {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
+            {Path, Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+            remove(Key, Pred, Path, ?NIL, Tree3);
+        false ->
+            bp_tree_store:update_node(NodeId, Node2, Tree)
+    end;
+remove(Key, Pred, [{{NodeId, Node}, ?NIL, ?NIL}], ChildId, Tree) ->
+    remove(Key, Pred, [{NodeId, Node}], ChildId, Tree);
 remove(Key, Pred, [{{NodeId, Node}, ParentKey, SNodeId} | Path], _,
     Tree = #bp_tree{order = Order}
 ) ->
