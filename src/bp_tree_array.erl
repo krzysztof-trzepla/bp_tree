@@ -52,7 +52,7 @@
 new(Size) ->
     #bp_tree_array{
         size = 0,
-        data = list_to_tuple(lists:duplicate(2 * Size + 1, ?NIL))
+        data = erlang:make_tuple(2 * Size + 1, ?NIL)
     }.
 
 %%--------------------------------------------------------------------

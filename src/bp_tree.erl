@@ -103,13 +103,13 @@ insert(Key, Value, Tree = #bp_tree{order = Order}) ->
     try
         case bp_tree_store:get_root_id(Tree) of
             {{ok, RootId}, Tree2} ->
-                {Path, Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+                {Path, Tree3} = bp_tree_path:find(Key, RootId, Tree2),
                 insert(Key, Value, Path, Tree3);
             {{error, not_found}, Tree2} ->
                 Root = bp_tree_node:new(Order, true),
                 {{ok, RootId}, Tree3} = bp_tree_store:create_node(Root, Tree2),
                 {ok, Tree4} = bp_tree_store:set_root_id(RootId, Tree3),
-                {Path, Tree5} = bp_tree_path:find_with_sibling(Key, RootId, Tree4),
+                {Path, Tree5} = bp_tree_path:find(Key, RootId, Tree4),
                 insert(Key, Value, Path, Tree5)
         end
     catch
@@ -213,7 +213,7 @@ get_prev_leaf({node, NodeId}, Tree) ->
     get_prev_leaf(NodeId, Node, Tree2);
 get_prev_leaf({key, Key}, Tree) ->
     {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
-    {[{{NodeId, _Node}, _, _} | Path], Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+    {[{NodeId, _Node} | Path], Tree3} = bp_tree_path:find(Key, RootId, Tree2),
     get_prev_leaf(Path, NodeId, Key, Tree3).
 
 %%====================================================================
@@ -228,14 +228,14 @@ get_prev_leaf({key, Key}, Tree) ->
 %% pair into next node on path.
 %% @end
 %%--------------------------------------------------------------------
--spec insert(key(), value(), bp_tree_path:path_with_sibling(), tree()) ->
+-spec insert(key(), value(), bp_tree_path:path(), tree()) ->
     {ok | error(), tree()}.
 insert(Key, Value, [], Tree = #bp_tree{order = Order}) ->
     Root = bp_tree_node:new(Order, false),
     {ok, Root2} = bp_tree_node:insert(Key, Value, Root),
     {{ok, RootId}, Tree2} = bp_tree_store:create_node(Root2, Tree),
     bp_tree_store:set_root_id(RootId, Tree2);
-insert(Key, Value, [{{NodeId, Node}, _, _} | Path], Tree = #bp_tree{order = Order}) ->
+insert(Key, Value, [{NodeId, Node} | Path], Tree = #bp_tree{order = Order}) ->
     {ok, Node2} = bp_tree_node:insert(Key, Value, Node),
     case bp_tree_node:size(Node2) > 2 * Order of
         true ->
@@ -294,7 +294,7 @@ split_node(NodeId, Node, Tree, []) ->
     {{ok, NewNodeId}, Tree3} = bp_tree_store:create_node(LNode2, Tree2),
     {ok, Tree4} = bp_tree_store:delete_node(NodeId, Tree3),
     {{Key2, NewNodeId, RNodeId}, Tree4};
-split_node(NodeId, Node, Tree, [{{PNodeId, PNode}, P1, P2} | PathTail]) ->
+split_node(NodeId, Node, Tree, [{PNodeId, PNode} | PathTail]) ->
     {ok, LNode, Key2, RNode} = bp_tree_node:split(Node),
     {{ok, RNodeId}, Tree2} = bp_tree_store:create_node(RNode, Tree),
     LNode2 = bp_tree_node:set_right_sibling(RNodeId, LNode),
@@ -302,7 +302,7 @@ split_node(NodeId, Node, Tree, [{{PNodeId, PNode}, P1, P2} | PathTail]) ->
     {ok, Tree4} = bp_tree_store:delete_node(NodeId, Tree3),
 
     {ok, PNode2} = bp_tree_node:insert(Key2, {NewNodeId, RNodeId}, PNode),
-    NewPath = [{{PNodeId, PNode2}, P1, P2} | PathTail],
+    NewPath = [{PNodeId, PNode2} | PathTail],
     Tree5 = update_sibling_smaller_key(NewPath, NewNodeId, Key2, Tree4,
       NewNodeId, LNode2#bp_tree_node.leaf),
 
@@ -437,13 +437,17 @@ update_sibling_greater_key([{{NodeID, Node}, _, _} | PathTail], CheckID, Key,
 %% Finds node left to the chosen one and set right sibling in this node.
 %% @end
 %%--------------------------------------------------------------------
--spec update_sibling_smaller_key(bp_tree_path:path_with_sibling(),
+-spec update_sibling_smaller_key(bp_tree_path:path(),
     bp_tree_node:id(), key(), tree(), bp_tree_node:id(), boolean()) -> tree().
 update_sibling_smaller_key(_Path, _CheckID, _Key, Tree, _ToSet, false) ->
     Tree;
 update_sibling_smaller_key([], _CheckID, _Key, Tree, _ToSet, _IdLeaf) ->
     Tree;
 update_sibling_smaller_key([{{NodeID, Node}, _, _} | PathTail], CheckID, Key,
+    Tree, ToSet, IdLeaf) ->
+    update_sibling_smaller_key([{NodeID, Node} | PathTail], CheckID, Key,
+        Tree, ToSet, IdLeaf);
+update_sibling_smaller_key([{NodeID, Node} | PathTail], CheckID, Key,
     Tree, ToSet, IdLeaf) ->
     {ok, NextID} = bp_tree_node:leftmost_child(Node),
     case NextID of
@@ -485,7 +489,7 @@ update_sibling(Key, NodeID, Node, Tree, ToSet) ->
 get_prev_leaf(NodeId, Node, Tree) ->
     {{ok, RootId}, Tree2} = bp_tree_store:get_root_id(Tree),
     {ok, Key} = bp_tree_node:key(1, Node),
-    {[{{NodeId, Node}, _, _} | Path], Tree3} = bp_tree_path:find_with_sibling(Key, RootId, Tree2),
+    {[{NodeId, Node} | Path], Tree3} = bp_tree_path:find(Key, RootId, Tree2),
     get_prev_leaf(Path, NodeId, Key, Tree3).
 
 %%--------------------------------------------------------------------
@@ -498,7 +502,7 @@ get_prev_leaf(NodeId, Node, Tree) ->
     tree()) -> {bp_tree_node:id() | undefined, tree_node() | undefined, tree()}.
 get_prev_leaf([], _CheckID, _Key, Tree) ->
     {undefined, undefined, Tree};
-get_prev_leaf([{{NodeID, Node}, _, _} | PathTail], CheckID, Key, Tree) ->
+get_prev_leaf([{NodeID, Node} | PathTail], CheckID, Key, Tree) ->
     {ok, NextID} = bp_tree_node:leftmost_child(Node),
     case NextID of
         CheckID ->
