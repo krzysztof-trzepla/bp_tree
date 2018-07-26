@@ -21,7 +21,7 @@
 %% API exports
 -export([new/1, size/1]).
 -export([get/2, update/3, remove/2, remove/3]).
--export([find/2, lower_bound/2]).
+-export([find/2, find_value/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
 -export([to_list/1, from_list/1, to_map/1, from_map/1]).
 
@@ -71,6 +71,12 @@ size(#bp_tree_array{size = Size}) ->
 %%--------------------------------------------------------------------
 -spec get({selector(), pos()}, array()) ->
     {ok, value() | {value(), value()}} | {error, out_of_range}.
+get({lower_bound, Key}, Array) ->
+    Pos = lower_bound(Key, Array),
+    get({left, Pos}, Array);
+get({lower_bound_key, Key}, Array) ->
+    Pos = lower_bound(Key, Array),
+    get({key, Pos}, Array);
 get({Selector, first}, Array = #bp_tree_array{}) ->
     get({Selector, 1}, Array);
 get({Selector, last}, Array = #bp_tree_array{size = Size}) ->
@@ -131,6 +137,12 @@ find(Key, Array = #bp_tree_array{}) ->
         {ok, Key} -> {ok, Pos};
         {ok, _} -> {error, not_found};
         {error, out_of_range} -> {error, not_found}
+    end.
+
+find_value(Key, Array = #bp_tree_array{}) ->
+    case find(Key, Array) of
+        {ok, Pos} -> get({left, Pos}, Array);
+        {error, Reason} -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------

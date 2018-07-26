@@ -21,7 +21,7 @@
 -export([leftmost_child/1]).
 -export([find/2, find_pos/2, lower_bound/2, left_sibling/2]).
 -export([insert/3, remove/3, merge/3, split/1]).
--export([rotate_right/3, rotate_left/3, replace_key/3]).
+-export([rotate_right/3, rotate_left/3]).
 
 -type id() :: any().
 
@@ -82,8 +82,7 @@ size(#bp_tree_node{children = Children}) ->
 child(_Key, #bp_tree_node{leaf = true}) ->
     {error, not_found};
 child(Key, #bp_tree_node{leaf = false, children = Children}) ->
-    Pos = bp_tree_array:lower_bound(Key, Children),
-    case bp_tree_array:get({left, Pos}, Children) of
+    case bp_tree_array:get({lower_bound, Key}, Children) of
         {ok, NodeId} ->
             {ok, NodeId};
         {error, out_of_range} ->
@@ -200,11 +199,8 @@ set_right_sibling(_NodeId, Node = #bp_tree_node{leaf = false}) ->
 %%--------------------------------------------------------------------
 -spec find(bp_tree:key(), bp_tree:tree_node()) ->
     {ok, bp_tree:value()} | {error, not_found}.
-find(Key, Node = #bp_tree_node{leaf = true, children = Children}) ->
-    case find_pos(Key, Node) of
-        {ok, Pos} -> bp_tree_array:get({left, Pos}, Children);
-        {error, Reason} -> {error, Reason}
-    end.
+find(Key, #bp_tree_node{leaf = true, children = Children}) ->
+    bp_tree_array:find_value(Key, Children).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -357,19 +353,3 @@ rotate_left(LNode = #bp_tree_node{leaf = false, children = LChildren},
         Key,
         RNode#bp_tree_node{children = RChildren2}
     }.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Replaces key with a new one in a node.
-%% @end
-%%--------------------------------------------------------------------
--spec replace_key(bp_tree:key(), bp_tree:key(), bp_tree:tree_node()) ->
-    {ok, bp_tree:tree_node()} | {error, term()}.
-replace_key(Key, NewKey, Node = #bp_tree_node{children = Children}) ->
-    case bp_tree_array:find(Key, Children) of
-        {ok, Pos} ->
-            {ok, Children2} = bp_tree_array:update({key, Pos}, NewKey, Children),
-            {ok, Node#bp_tree_node{children = Children2}};
-        {error, Reason} ->
-            {error, Reason}
-    end.
