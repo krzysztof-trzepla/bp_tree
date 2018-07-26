@@ -251,7 +251,7 @@ split(Array = #bp_tree_array{size = Size, data = Data}) ->
     Begin = 2 * Pivot,
     SplitKey = element(Begin, Data),
     LData = setelement(Begin, Data, ?NIL),
-    RData = list_to_tuple(lists:duplicate(erlang:size(Data), ?NIL)),
+    RData = erlang:make_tuple(erlang:size(Data), ?NIL),
     {LData3, RData3} = lists:foldl(fun(Pos, {LData2, RData2}) ->
         {
             setelement(Begin + Pos, LData2, ?NIL),
