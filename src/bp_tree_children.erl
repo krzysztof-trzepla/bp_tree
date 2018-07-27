@@ -365,10 +365,11 @@ remove({Selector, Key}, Pred, #bp_tree_children{data = Tree} = Children) ->
 -spec split(array()) -> {array(), key(), array()}.
 split(#bp_tree_children{data = Tree} = Children) ->
     Size = gb_trees:size(Tree),
+    SplitBase = Size div 2,
+    SplitSize = SplitBase + 1,
     List = gb_trees:to_list(Tree),
-    Left = lists:sublist(List, Size div 2),
-    % TODO - jak dziala z appendem?
-    [{SplitKey, SplitValue} | Right] = lists:sublist(List, Size div 2 + 1, Size div 2),
+    Left = lists:sublist(List, SplitBase),
+    [{SplitKey, SplitValue} | Right] = lists:sublist(List, SplitSize, SplitSize),
     {
         #bp_tree_children{data = gb_trees:from_orddict(Left), last_value = SplitValue},
         SplitKey,
