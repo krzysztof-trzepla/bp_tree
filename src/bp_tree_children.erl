@@ -296,8 +296,9 @@ insert({Selector, Key}, Value0, #bp_tree_children{data = Tree} = Children) ->
 %%--------------------------------------------------------------------
 -spec append({selector(), key()}, value() | {value(), value()}, array()) ->
     {ok, array()} | {error, out_of_space}.
-append({key, Key}, Key, #bp_tree_children{} = Children) ->
-    {ok, Children#bp_tree_children{last_value = Key}};
+append({key, Key}, Key, #bp_tree_children{data = Tree, last_value = LV} = Children) ->
+    Tree2 = gb_trees:enter(Key, LV, Tree),
+    {ok, Children#bp_tree_children{data = Tree2, last_value = ?NIL}};
 append({right, Key}, Value, #bp_tree_children{data = Tree} = Children) ->
     {_, OldValue, Tree2} = gb_trees:take_largest(Tree),
     Tree3 = gb_trees:enter(Key, OldValue, Tree2),
