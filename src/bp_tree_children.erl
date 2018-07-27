@@ -23,15 +23,10 @@
 -export([get/2, update/3, remove/2, remove/3]).
 -export([find/2, find_value/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
--export([to_map/1, from_map/1]).
+-export([to_map/1, from_map/1, to_list/1, from_list/1]).
 
 -record(bp_tree_children, {
     last_value = ?NIL,
-    data
-}).
-
--record(bp_tree_array, {
-    size,
     data
 }).
 
@@ -210,14 +205,14 @@ update({right, last}, Value, #bp_tree_children{} = Children) ->
 %%--------------------------------------------------------------------
 -spec find(key(), array()) -> {ok, pos_integer()} | {error, not_found}.
 find(Key, #bp_tree_children{data = Tree}) ->
-    find(Key, Tree, gb_trees:iterator()).
+    find(Key, gb_trees:iterator(Tree), 1).
 
 find(Key, It, Pos) ->
     case gb_trees:next(It) of
         none ->
             {error, not_found};
         {Key2, _Value, It2} ->
-            case {Key2 =:= Key, Key2 > Key} of
+            case {Key2 =:= Key, Key2 < Key} of
                 {true, _} -> {ok, Pos};
                 {_, true} -> find(Key, It2, Pos + 1);
                 _ -> {error, not_found}
@@ -270,7 +265,7 @@ insert({Selector, Key}, Value0, #bp_tree_children{data = Tree} = Children) ->
                 both ->
                     {Value, NextValue} = Value0,
                     Tree2 = gb_trees:insert(Key, Value, Tree),
-                    Tree3 = gb_trees:insert(NextKey, NextValue, Tree2),
+                    Tree3 = gb_trees:enter(NextKey, NextValue, Tree2),
                     {ok, Children#bp_tree_children{data = Tree3}};
                 _ ->
                     Tree2 = gb_trees:insert(Key, Value0, Tree),
@@ -414,4 +409,23 @@ from_map(Map) ->
     LV = maps:get(?LAST_KEY, Map, ?NIL),
     Map2 = maps:remove(?LAST_KEY, Map),
     Tree = gb_trees:from_orddict(lists:sort(maps:to_list(Map2))),
+    #bp_tree_children{data = Tree, last_value = LV}.
+
+to_list(#bp_tree_children{data = Tree, last_value = LV}) ->
+    List1 = lists:foldl(fun({K, V}, Acc) ->
+        [K, V | Acc]
+    end, [], gb_trees:to_list(Tree)),
+    case LV of
+        ?NIL -> lists:reverse(List1);
+        _ -> lists:reverse([LV | List1])
+    end.
+
+from_list(List) ->
+    {List2, LV} = lists:foldl(fun
+        (Element, {Acc, ?NIL}) ->
+            {Acc, Element};
+        (Key, {Acc, Value}) ->
+            {[{Key, Value} | Acc], ?NIL}
+    end, {[], ?NIL}, List),
+    Tree = gb_trees:from_orddict(lists:reverse(List2)),
     #bp_tree_children{data = Tree, last_value = LV}.
