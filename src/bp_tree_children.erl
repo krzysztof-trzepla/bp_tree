@@ -75,29 +75,123 @@ size(#bp_tree_children{data = Tree}) ->
 %%--------------------------------------------------------------------
 -spec get({selector(), pos()}, array()) ->
     {ok, value() | {value(), value()}} | {error, out_of_range}.
-get({lower_bound, Key}, Array) ->
-    Pos = lower_bound(Key, Array),
-    get({left, Pos}, Array);
-get({lower_bound_key, Key}, Array) ->
-    Pos = lower_bound(Key, Array),
-    get({key, Pos}, Array);
-get({Selector, first}, Array = #bp_tree_array{}) ->
-    get({Selector, 1}, Array);
-get({Selector, last}, Array = #bp_tree_array{size = Size}) ->
-    get({Selector, Size}, Array);
-get({right, 0}, #bp_tree_array{data = Data}) ->
-    {ok, erlang:element(1, Data)};
-get({_Selector, Pos}, #bp_tree_array{size = Size})
-    when Pos < 1 orelse Pos > Size ->
-    {error, out_of_range};
-get({left, Pos}, #bp_tree_array{data = Data}) ->
-    {ok, erlang:element(2 * Pos - 1, Data)};
-get({key, Pos}, #bp_tree_array{data = Data}) ->
-    {ok, erlang:element(2 * Pos, Data)};
-get({right, Pos}, #bp_tree_array{data = Data}) ->
-    {ok, erlang:element(2 * Pos + 1, Data)};
-get({both, Pos}, #bp_tree_array{data = Data}) ->
-    {ok, {erlang:element(2 * Pos - 1, Data), erlang:element(2 * Pos + 1, Data)}}.
+get({lower_bound, Key}, #bp_tree_children{data = Tree}) ->
+    It =  gb_trees:iterator_from(Key, Tree),
+    case gb_trees:next(It) of
+        {_, Value, _} ->
+            {ok, Value};
+        none ->
+            {error, out_of_range}
+    end;
+get({lower_bound_key, Key}, #bp_tree_children{data = Tree}) ->
+    It =  gb_trees:iterator_from(Key, Tree),
+    case gb_trees:next(It) of
+        {LKey, _, _} ->
+            {ok, LKey};
+        none ->
+            {error, out_of_range}
+    end;
+get({left, first}, #bp_tree_children{data = Tree}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {error, out_of_range};
+        _ ->
+            {_K, V} = gb_trees:smallest(Tree),
+            {ok, V}
+    end;
+get({key, first}, #bp_tree_children{data = Tree}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {error, out_of_range};
+        _ ->
+            {K, _V} = gb_trees:smallest(Tree),
+            {ok, K}
+    end;
+get({left, last}, #bp_tree_children{data = Tree}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {error, out_of_range};
+        _ ->
+            {_K, V} = gb_trees:largest(Tree),
+            {ok, V}
+    end;
+get({key, last}, #bp_tree_children{data = Tree}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {error, out_of_range};
+        _ ->
+            {K, _V} = gb_trees:largest(Tree),
+            {ok, K}
+    end;
+get({both, last}, #bp_tree_children{data = Tree, last_value = LV}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {error, out_of_range};
+        _ ->
+            {_K, V} = gb_trees:largest(Tree),
+            {ok, {V, LV}}
+    end;
+get({right, last}, #bp_tree_children{last_value = LV}) ->
+    {ok, LV};
+get({right, 0}, #bp_tree_children{data = Tree, last_value = LV}) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            {ok, LV};
+        _ ->
+            {_K, V} = gb_trees:smallest(Tree),
+            {ok, V}
+    end;
+get({left, Pos}, #bp_tree_children{data = Tree}) ->
+    case get_pos(Pos, Tree) of
+        {_Key, Value, _It} ->
+            {ok, Value};
+        Error ->
+            Error
+    end;
+get({key, Pos}, #bp_tree_children{data = Tree}) ->
+    case get_pos(Pos, Tree) of
+        {Key, _Value, _It} ->
+            {ok, Key};
+        Error ->
+            Error
+    end;
+get({right, Pos}, #bp_tree_children{data = Tree, last_value = LV}) ->
+    case get_pos(Pos, Tree) of
+        {_Key, _Value, It} ->
+            case gb_trees:next(It) of
+                none ->
+                    {ok, LV};
+                {_Key2, Value2, _It2} ->
+                    {ok, Value2}
+            end;
+        Error ->
+            Error
+    end;
+get({both, Pos}, #bp_tree_children{data = Tree, last_value = LV}) ->
+    case get_pos(Pos, Tree) of
+        {_Key, Value, It} ->
+            case gb_trees:next(It) of
+                none ->
+                    {ok, {Value, LV}};
+                {_Key2, Value2, _It2} ->
+                    {ok, {Value, Value2}}
+            end;
+        Error ->
+            Error
+    end.
+
+get_pos(Pos, Tree) ->
+    get_pos(gb_trees:iterator(Tree), Pos, 0, {error, out_of_range}).
+
+get_pos(_It, Pos, CurrentPos, Ans) when CurrentPos >= Pos ->
+    Ans;
+get_pos(It, Pos, CurrentPos, _TmpAns) ->
+    case gb_trees:next(It) of
+        none ->
+            {error, out_of_range};
+        {_Key, _Value, It2} = Ans ->
+            get_pos(It2, Pos, CurrentPos + 1, Ans)
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -116,17 +210,16 @@ update({right, last}, Value, #bp_tree_children{} = Children) ->
 %%--------------------------------------------------------------------
 -spec find(key(), array()) -> {ok, pos_integer()} | {error, not_found}.
 find(Key, #bp_tree_children{data = Tree}) ->
-    find(Key, Tree, 1).
+    find(Key, Tree, gb_trees:iterator()).
 
-find(Key, Tree, Pos) ->
-    case gb_trees:is_empty(Tree) of
-        true ->
+find(Key, It, Pos) ->
+    case gb_trees:next(It) of
+        none ->
             {error, not_found};
-        _ ->
-            {Key2, _Value, Tree2} = gb_trees:take_smallest(Tree),
+        {Key2, _Value, It2} ->
             case {Key2 =:= Key, Key2 > Key} of
                 {true, _} -> {ok, Pos};
-                {_, true} -> find(Key, Tree2, Pos + 1);
+                {_, true} -> find(Key, It2, Pos + 1);
                 _ -> {error, not_found}
             end
     end.
