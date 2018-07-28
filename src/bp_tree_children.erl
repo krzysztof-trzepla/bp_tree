@@ -222,7 +222,7 @@ find(Key, It, Pos) ->
 find_value(Key, #bp_tree_children{data = Tree}) ->
     It = gb_trees:iterator_from(Key, Tree),
     case gb_trees:next(It) of
-        {Key, Value, _} -> Value;
+        {Key, Value, _} -> {ok, Value};
         _ -> {error, not_found}
     end.
 
@@ -294,10 +294,16 @@ insert({Selector, Key}, Value0, #bp_tree_children{data = Tree} = Children) ->
 append({key, Key}, Key, #bp_tree_children{data = Tree, last_value = LV} = Children) ->
     Tree2 = gb_trees:enter(Key, LV, Tree),
     {ok, Children#bp_tree_children{data = Tree2, last_value = ?NIL}};
-append({right, Key}, Value, #bp_tree_children{data = Tree} = Children) ->
-    {_, OldValue, Tree2} = gb_trees:take_largest(Tree),
-    Tree3 = gb_trees:enter(Key, OldValue, Tree2),
-    {ok, Children#bp_tree_children{data = Tree3, last_value = Value}};
+append({right, Key}, Value, #bp_tree_children{data = Tree, last_value = LV} = Children) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            Tree2 = gb_trees:insert(Key, LV, Tree),
+            {ok, Children#bp_tree_children{data = Tree2, last_value = Value}};
+        _ ->
+            {_, OldValue, Tree2} = gb_trees:take_largest(Tree),
+            Tree3 = gb_trees:enter(Key, OldValue, Tree2),
+            {ok, Children#bp_tree_children{data = Tree3, last_value = Value}}
+    end;
 append({both, Key}, {Value, Next}, #bp_tree_children{data = Tree} = Children) ->
     Tree2 = gb_trees:enter(Key, Value, Tree),
     {ok, Children#bp_tree_children{data = Tree2, last_value = Next}}.
@@ -343,7 +349,7 @@ remove({Selector, Key}, Pred, #bp_tree_children{data = Tree} = Children) ->
                         right ->
                             case gb_trees:next(It2) of
                                 {Key2, _, _} ->
-                                    Tree3 = gb_trees:insert(Key2, Value, Tree2),
+                                    Tree3 = gb_trees:enter(Key2, Value, Tree2),
                                     {ok, Children#bp_tree_children{data = Tree3}};
                                 _ ->
                                     {ok, Children#bp_tree_children{data = Tree2,
