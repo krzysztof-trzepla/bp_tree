@@ -300,9 +300,8 @@ append({right, Key}, Value, #bp_tree_children{data = Tree, last_value = LV} = Ch
             Tree2 = gb_trees:insert(Key, LV, Tree),
             {ok, Children#bp_tree_children{data = Tree2, last_value = Value}};
         _ ->
-            {_, OldValue, Tree2} = gb_trees:take_largest(Tree),
-            Tree3 = gb_trees:enter(Key, OldValue, Tree2),
-            {ok, Children#bp_tree_children{data = Tree3, last_value = Value}}
+            Tree2 = gb_trees:enter(Key, LV, Tree),
+            {ok, Children#bp_tree_children{data = Tree2, last_value = Value}}
     end;
 append({both, Key}, {Value, Next}, #bp_tree_children{data = Tree} = Children) ->
     Tree2 = gb_trees:enter(Key, Value, Tree),
