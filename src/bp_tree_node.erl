@@ -22,6 +22,7 @@
 -export([find/2, find_pos/2, lower_bound/2, left_sibling/2]).
 -export([insert/3, remove/3, merge/3, split/1]).
 -export([rotate_right/3, rotate_left/3]).
+-export([fold/4]).
 
 -type id() :: any().
 
@@ -355,3 +356,6 @@ rotate_left(LNode = #bp_tree_node{leaf = false, children = LChildren},
         Key,
         RNode#bp_tree_node{children = RChildren2}
     }.
+
+fold(KeyOrPos, #bp_tree_node{children = LChildren}, Fun, Acc) ->
+    ?CHILD_MODULE:fold(KeyOrPos, LChildren, Fun, Acc).

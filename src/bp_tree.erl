@@ -161,28 +161,28 @@ fold(Fun, Acc, Tree) ->
 fold({node_id, NodeId}, Fun, Acc, Tree) ->
     case bp_tree_store:get_node(NodeId, Tree) of
         {{ok, Node}, Tree2} ->
-            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2};
+            {{ok, fold_node(all, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
 fold({offset, Offset}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_offset(Offset, Tree) of
         {{ok, Pos, Node}, Tree2} ->
-            {{ok, fold_node(Pos, Node, Fun, Acc)}, Tree2};
+            {{ok, fold_node({pos, Pos}, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
 fold({start_key, Key}, Fun, Acc, Tree) ->
-    case bp_tree_leaf:lower_bound(Key, Tree) of
-        {{ok, Pos, Node}, Tree2} ->
-            {{ok, fold_node(Pos, Node, Fun, Acc)}, Tree2};
+    case bp_tree_leaf:lower_bound_node(Key, Tree) of
+        {{ok, Node}, Tree2} ->
+            {{ok, fold_node({key, Key}, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
 fold({node_of_key, Key}, Fun, Acc, Tree) ->
     case bp_tree_leaf:lower_bound_node(Key, Tree) of
         {{ok, Node}, Tree2} ->
-            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2};
+            {{ok, fold_node(all, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end;
@@ -191,12 +191,13 @@ fold({node_prev_to_key, Key}, Fun, Acc, Tree) ->
         {_, undefined, Tree2} ->
             {{error, first_node}, Tree2};
         {_, Node, Tree2} ->
-            {{ok, fold_node(1, Node, Fun, Acc)}, Tree2}
+            {{ok, fold_node(all, Node, Fun, Acc)}, Tree2}
     end;
+% TODO - niewydajne
 fold({prev_key, Key}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_next(Key, Tree) of
         {{ok, Pos, Node}, Tree2} ->
-            {{ok, fold_node(Pos, Node, Fun, Acc)}, Tree2};
+            {{ok, fold_node({pos, Pos}, Node, Fun, Acc)}, Tree2};
         {{error, Reason}, Tree2} ->
             {{error, Reason}, Tree2}
     end.
@@ -550,16 +551,11 @@ get_prev_leaf_traverse_down(Key, NodeID, Node, Tree) ->
 %%--------------------------------------------------------------------
 -spec fold_node(pos_integer(), tree_node(), fold_fun(), fold_acc()) ->
     {fold_acc(), fold_next_node_id()}.
-fold_node(Pos, Node, Fun, Acc) ->
-    case {bp_tree_node:key(Pos, Node), bp_tree_node:value(Pos, Node)} of
-        {{ok, Key}, {ok, Value}} ->
-            Acc2 = Fun(Key, Value, Acc),
-            fold_node(Pos + 1, Node, Fun, Acc2);
-        {{error, out_of_range}, {error, out_of_range}} ->
-            case bp_tree_node:right_sibling(Node) of
-                {ok, NodeId} -> {Acc, NodeId};
-                {error, not_found} -> {Acc, undefined}
-            end
+fold_node(KeyOrPos, Node, Fun, Acc) ->
+    Acc2 = bp_tree_node:fold(KeyOrPos, Node, Fun, Acc),
+    case bp_tree_node:right_sibling(Node) of
+        {ok, NodeId} -> {Acc2, NodeId};
+        {error, not_found} -> {Acc2, undefined}
     end.
 
 %%--------------------------------------------------------------------

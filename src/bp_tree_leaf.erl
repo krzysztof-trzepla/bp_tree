@@ -124,6 +124,7 @@ find_next(Key, NodeId, Tree, Path) ->
     [bp_tree_node:id()]) -> find_pos_result().
 find_next_in_leaf(Key, Node, Tree, Path) ->
     Pos = bp_tree_node:lower_bound(Key, Node),
+    % TODO - change
     case bp_tree_node:value(Pos + 1, Node) of
         {ok, _} ->
             {{ok, Pos + 1, Node}, Tree};

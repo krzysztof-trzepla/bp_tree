@@ -24,6 +24,7 @@
 -export([find/2, find_value/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
 -export([to_map/1, from_map/1, to_list/1, from_list/1]).
+-export([fold/4]).
 
 -record(bp_tree_children, {
     last_value = ?NIL,
@@ -435,3 +436,27 @@ from_list(List) ->
     end, {[], ?NIL}, List),
     Tree = gb_trees:from_orddict(lists:reverse(List2)),
     #bp_tree_children{data = Tree, last_value = LV}.
+
+fold({key, Key}, #bp_tree_children{data = Tree}, Fun, Acc) ->
+    It = gb_trees:iterator_from(Key, Tree),
+    fold_helper(It, Fun, Acc);
+fold({pos, Pos}, #bp_tree_children{data = Tree}, Fun, Acc) ->
+    case get_pos(Pos, Tree) of
+        {Key, Value, It} ->
+            Acc2 = Fun(Key, Value, Acc),
+            fold_helper(It, Fun, Acc2);
+        Error ->
+            Error
+    end;
+fold(all, #bp_tree_children{data = Tree}, Fun, Acc) ->
+    It = gb_trees:iterator(Tree),
+    fold_helper(It, Fun, Acc).
+
+fold_helper(It, Fun, Acc) ->
+    case gb_trees:next(It) of
+        {Key, Value, It2} ->
+            Acc2 = Fun(Key, Value, Acc),
+            fold_helper(It2, Fun, Acc2);
+        _ ->
+            Acc
+    end.
