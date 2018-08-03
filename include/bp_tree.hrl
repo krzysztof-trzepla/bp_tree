@@ -24,7 +24,7 @@
 
 -record(bp_tree_node, {
     leaf :: boolean(),
-    children :: bp_tree_array:array()
+    children :: bp_tree_children:children()
 }).
 
 -endif.

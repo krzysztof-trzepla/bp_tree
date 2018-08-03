@@ -32,7 +32,7 @@
 
 -type key() :: any().
 -type value() :: any().
--type selector() :: key | left | right | both.
+-type selector() :: key | left | right | both | lower_bound | lower_bound_key.
 -type pos() :: non_neg_integer() | first | last.
 -type remove_pred() :: fun((value()) -> boolean()).
 -opaque array() :: #bp_tree_array{}.
@@ -139,6 +139,12 @@ find(Key, Array = #bp_tree_array{}) ->
         {error, out_of_range} -> {error, not_found}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns value for a key in an array or fails with a missing error.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_value(key(), array()) -> {ok, value()} | {error, not_found}.
 find_value(Key, Array = #bp_tree_array{}) ->
     case find(Key, Array) of
         {ok, Pos} -> get({left, Pos}, Array);

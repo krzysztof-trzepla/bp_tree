@@ -35,11 +35,13 @@
 -type fold_acc() :: any().
 -type fold_fun() :: fun((key(), value(), fold_acc()) -> fold_acc()).
 -type fold_next_node_id() :: bp_tree_node:id() | undefined.
+-type fold_start_spec() :: {pos, pos_integer()} | {key, key()} | all.
 -type error() :: {error, term()}.
 -type error_stacktrace() :: {error, {term(), [erlang:stack_item()]}}.
 
 -export_type([key/0, value/0, tree/0, tree_node/0, order/0]).
--export_type([remove_pred/0, fold_init/0, fold_acc/0, fold_fun/0]).
+-export_type([remove_pred/0]).
+-export_type([fold_init/0, fold_acc/0, fold_fun/0, fold_start_spec/0]).
 
 %%====================================================================
 %% API functions
@@ -99,14 +101,14 @@ find(Key, Tree = #bp_tree{}) ->
 %%--------------------------------------------------------------------
 -spec insert(key(), value(), tree()) ->
     {ok | error() | error_stacktrace(), tree()}.
-insert(Key, Value, Tree = #bp_tree{order = Order}) ->
+insert(Key, Value, Tree) ->
     try
         case bp_tree_store:get_root_id(Tree) of
             {{ok, RootId}, Tree2} ->
                 {Path, Tree3} = bp_tree_path:find(Key, RootId, Tree2),
                 insert(Key, Value, Path, Tree3);
             {{error, not_found}, Tree2} ->
-                Root = bp_tree_node:new(Order, true),
+                Root = bp_tree_node:new(true),
                 {{ok, RootId}, Tree3} = bp_tree_store:create_node(Root, Tree2),
                 {ok, Tree4} = bp_tree_store:set_root_id(RootId, Tree3),
                 {Path, Tree5} = bp_tree_path:find(Key, RootId, Tree4),
@@ -193,7 +195,7 @@ fold({node_prev_to_key, Key}, Fun, Acc, Tree) ->
         {_, Node, Tree2} ->
             {{ok, fold_node(all, Node, Fun, Acc)}, Tree2}
     end;
-% TODO - niewydajne
+% TODO - low performance
 fold({prev_key, Key}, Fun, Acc, Tree) ->
     case bp_tree_leaf:find_next(Key, Tree) of
         {{ok, Pos, Node}, Tree2} ->
@@ -231,8 +233,8 @@ get_prev_leaf({key, Key}, Tree) ->
 %%--------------------------------------------------------------------
 -spec insert(key(), value(), bp_tree_path:path(), tree()) ->
     {ok | error(), tree()}.
-insert(Key, Value, [], Tree = #bp_tree{order = Order}) ->
-    Root = bp_tree_node:new(Order, false),
+insert(Key, Value, [], Tree) ->
+    Root = bp_tree_node:new(false),
     {ok, Root2} = bp_tree_node:insert(Key, Value, Root),
     {{ok, RootId}, Tree2} = bp_tree_store:create_node(Root2, Tree),
     bp_tree_store:set_root_id(RootId, Tree2);
@@ -254,7 +256,7 @@ insert(Key, Value, [{NodeId, Node} | Path], Tree = #bp_tree{order = Order}) ->
 %% path with a sibling.
 %% @end
 %%--------------------------------------------------------------------
--spec remove(key(), remove_pred(), bp_tree_path:path_with_sibling(),
+-spec remove(key(), remove_pred(), bp_tree_path:path() | bp_tree_path:path_with_sibling(),
     bp_tree_node:id(), tree()) -> {ok | error(), tree()}.
 remove(Key, Pred, [{NodeId, Node}], ChildId, Tree) ->
     {ok, Node2} = bp_tree_node:remove(Key, Pred, Node),
@@ -450,7 +452,7 @@ update_sibling_greater_key([{{NodeID, Node}, _, _} | PathTail], CheckID, Key,
 %% Finds node left to the chosen one and set right sibling in this node.
 %% @end
 %%--------------------------------------------------------------------
--spec update_sibling_smaller_key(bp_tree_path:path(),
+-spec update_sibling_smaller_key(bp_tree_path:path() | bp_tree_path:path_with_sibling(),
     bp_tree_node:id(), key(), tree(), bp_tree_node:id(), boolean()) -> tree().
 update_sibling_smaller_key(_Path, _CheckID, _Key, Tree, _ToSet, false) ->
     Tree;
@@ -546,10 +548,10 @@ get_prev_leaf_traverse_down(Key, NodeID, Node, Tree) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Folds B+ tree leaf starting from a position.
+%% Folds B+ tree leaf.
 %% @end
 %%--------------------------------------------------------------------
--spec fold_node(pos_integer(), tree_node(), fold_fun(), fold_acc()) ->
+-spec fold_node(fold_start_spec(), tree_node(), fold_fun(), fold_acc()) ->
     {fold_acc(), fold_next_node_id()}.
 fold_node(KeyOrPos, Node, Fun, Acc) ->
     Acc2 = bp_tree_node:fold(KeyOrPos, Node, Fun, Acc),

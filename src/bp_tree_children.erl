@@ -19,26 +19,29 @@
 -include("bp_tree.hrl").
 
 %% API exports
--export([new/1, size/1]).
--export([get/2, update/3, remove/2, remove/3]).
+-export([new/0, size/1]).
+-export([get/2, update_last_value/2, remove/2, remove/3]).
 -export([find/2, find_value/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
--export([to_map/1, from_map/1, to_list/1, from_list/1]).
+-export([to_map/1, from_map/1]).
 -export([fold/4]).
 
+%% For eunit tests
+-export([to_list/1, from_list/1]).
+
 -record(bp_tree_children, {
-    last_value = ?NIL,
-    data
+    last_value = ?NIL :: value(),
+    data :: gb_trees:tree()
 }).
 
 -type key() :: any().
 -type value() :: any().
--type selector() :: key | left | right | both.
+-type selector() :: key | left | right | both | lower_bound | lower_bound_key.
 -type pos() :: non_neg_integer() | first | last.
 -type remove_pred() :: fun((value()) -> boolean()).
--opaque array() :: #bp_tree_children{}.
+-opaque children() :: #bp_tree_children{}.
 
--export_type([array/0, selector/0]).
+-export_type([children/0, selector/0]).
 
 %%====================================================================
 %% API functions
@@ -49,8 +52,8 @@
 %% Creates a new array.
 %% @end
 %%--------------------------------------------------------------------
--spec new(pos_integer()) -> array().
-new(_Size) ->
+-spec new() -> children().
+new() ->
     #bp_tree_children{
         data = gb_trees:empty()
     }.
@@ -60,16 +63,16 @@ new(_Size) ->
 %% Returns the size of an array.
 %% @end
 %%--------------------------------------------------------------------
--spec size(array()) -> non_neg_integer().
+-spec size(children()) -> non_neg_integer().
 size(#bp_tree_children{data = Tree}) ->
     gb_trees:size(Tree).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns an item from an array at a selected position.
+%% Returns an item..
 %% @end
 %%--------------------------------------------------------------------
--spec get({selector(), pos()}, array()) ->
+-spec get({selector(), pos()}, children()) ->
     {ok, value() | {value(), value()}} | {error, out_of_range}.
 get({lower_bound, Key}, #bp_tree_children{data = Tree}) ->
     It =  gb_trees:iterator_from(Key, Tree),
@@ -176,50 +179,31 @@ get({both, Pos}, #bp_tree_children{data = Tree, last_value = LV}) ->
             Error
     end.
 
-get_pos(Pos, Tree) ->
-    get_pos(gb_trees:iterator(Tree), Pos, 0, {error, out_of_range}).
-
-get_pos(_It, Pos, CurrentPos, Ans) when CurrentPos >= Pos ->
-    Ans;
-get_pos(It, Pos, CurrentPos, _TmpAns) ->
-    case gb_trees:next(It) of
-        none ->
-            {error, out_of_range};
-        {_Key, _Value, It2} = Ans ->
-            get_pos(It2, Pos, CurrentPos + 1, Ans)
-    end.
-
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns an item in an array at a selected position.
+%% Updates value for last key.
 %% @end
 %%--------------------------------------------------------------------
--spec update({selector(), pos()}, value() | {value(), value()},
-    array()) -> {ok, array()} | {error, out_of_range}.
-update({right, last}, Value, #bp_tree_children{} = Children) ->
+-spec update_last_value(value(), children()) ->
+    {ok, children()} | {error, out_of_range}.
+update_last_value(Value, #bp_tree_children{} = Children) ->
     {ok, Children#bp_tree_children{last_value = Value}}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns position of a key in an array or fails with a missing error.
+%% Returns position of a key or fails with a missing error.
 %% @end
 %%--------------------------------------------------------------------
--spec find(key(), array()) -> {ok, pos_integer()} | {error, not_found}.
+-spec find(key(), children()) -> {ok, pos_integer()} | {error, not_found}.
 find(Key, #bp_tree_children{data = Tree}) ->
     find(Key, gb_trees:iterator(Tree), 1).
 
-find(Key, It, Pos) ->
-    case gb_trees:next(It) of
-        none ->
-            {error, not_found};
-        {Key2, _Value, It2} ->
-            case {Key2 =:= Key, Key2 < Key} of
-                {true, _} -> {ok, Pos};
-                {_, true} -> find(Key, It2, Pos + 1);
-                _ -> {error, not_found}
-            end
-    end.
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns value for a key or fails with a missing error.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_value(key(), children()) -> {ok, value()} | {error, not_found}.
 find_value(Key, #bp_tree_children{data = Tree}) ->
     It = gb_trees:iterator_from(Key, Tree),
     case gb_trees:next(It) of
@@ -229,33 +213,20 @@ find_value(Key, #bp_tree_children{data = Tree}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a position of a first key in an array that does not compare less
-%% than a key.
+%% @equiv lower_bound(Key, Tree, 1)
 %% @end
 %%--------------------------------------------------------------------
--spec lower_bound(key(), array()) -> pos_integer().
+-spec lower_bound(key(), children()) -> pos_integer().
 lower_bound(Key, #bp_tree_children{data = Tree}) ->
     lower_bound(Key, Tree, 1).
 
-lower_bound(Key, Tree, Pos) ->
-    case gb_trees:is_empty(Tree) of
-        true ->
-            Pos;
-        _ ->
-            {Key2, _Value, Tree2} = gb_trees:take_smallest(Tree),
-            case Key2 >= Key of
-                true -> Pos;
-                _ -> lower_bound(Key, Tree2, Pos + 1)
-            end
-    end.
-
 %%--------------------------------------------------------------------
 %% @doc
-%% Inserts a key-value pair into an array.
+%% Inserts a key-value pair.
 %% @end
 %%--------------------------------------------------------------------
--spec insert({selector(), key()}, value() | {value(), value()}, array()) ->
-    {ok, array()} | {error, out_of_space | already_exists}.
+-spec insert({selector(), key()}, value() | {value(), value()}, children()) ->
+    {ok, children()} | {error, out_of_space | already_exists}.
 insert({Selector, Key}, Value0, #bp_tree_children{data = Tree} = Children) ->
     It = gb_trees:iterator_from(Key, Tree),
     case gb_trees:next(It) of
@@ -287,11 +258,11 @@ insert({Selector, Key}, Value0, #bp_tree_children{data = Tree} = Children) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Appends a key-value pair to an array.
+%% Appends a key, value or key-value pair.
 %% @end
 %%--------------------------------------------------------------------
--spec append({selector(), key()}, value() | {value(), value()}, array()) ->
-    {ok, array()} | {error, out_of_space}.
+-spec append({selector(), key()}, value() | {value(), value()}, children()) ->
+    {ok, children()} | {error, out_of_space}.
 append({key, Key}, Key, #bp_tree_children{data = Tree, last_value = LV} = Children) ->
     Tree2 = gb_trees:enter(Key, LV, Tree),
     {ok, Children#bp_tree_children{data = Tree2, last_value = ?NIL}};
@@ -310,32 +281,32 @@ append({both, Key}, {Value, Next}, #bp_tree_children{data = Tree} = Children) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prepends a key-value pair to an array.
+%% Prepends a key-value pair.
 %% @end
 %%--------------------------------------------------------------------
--spec prepend({selector(), key()}, value() | {value(), value()}, array()) ->
-    {ok, array()} | {error, out_of_space}.
-prepend({left, Key}, Value, #bp_tree_children{data = Tree} = Children) ->
+-spec prepend(key(), value() | {value(), value()}, children()) ->
+    {ok, children()} | {error, out_of_space}.
+prepend(Key, Value, #bp_tree_children{data = Tree} = Children) ->
     Tree2 = gb_trees:insert(Key, Value, Tree),
     {ok, Children#bp_tree_children{data = Tree2}}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes a key and associated value from an array.
+%% Removes a key and associated value.
 %% @end
 %%--------------------------------------------------------------------
--spec remove({selector(), key()}, array()) ->
-    {ok, array()} | {error, term()}.
+-spec remove({selector(), key()}, children()) ->
+    {ok, children()} | {error, term()}.
 remove({Selector, Key}, #bp_tree_children{} = Children) ->
     remove({Selector, Key}, fun(_) -> true end, Children).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes a key and associated value from an array if predicate is satisfied.
+%% Removes a key and associated value if predicate is satisfied.
 %% @end
 %%--------------------------------------------------------------------
--spec remove({selector(), key()}, remove_pred(), array()) ->
-    {ok, array()} | {error, term()}.
+-spec remove({selector(), key()}, remove_pred(), children()) ->
+    {ok, children()} | {error, term()}.
 remove({Selector, Key}, Pred, #bp_tree_children{data = Tree} = Children) ->
     It = gb_trees:iterator_from(Key, Tree),
     case gb_trees:next(It) of
@@ -365,10 +336,10 @@ remove({Selector, Key}, Pred, #bp_tree_children{data = Tree} = Children) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Splits an array in half. Returns left and right parts and a split key.
+%% Splits children record in half. Returns left and right parts and a split key.
 %% @end
 %%--------------------------------------------------------------------
--spec split(array()) -> {array(), key(), array()}.
+-spec split(children()) -> {children(), key(), children()}.
 split(#bp_tree_children{data = Tree} = Children) ->
     Size = gb_trees:size(Tree),
     SplitBase = Size div 2,
@@ -384,10 +355,10 @@ split(#bp_tree_children{data = Tree} = Children) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Merges two arrays into a single array.
+%% Merges two children records into a single array.
 %% @end
 %%--------------------------------------------------------------------
--spec merge(array(), array()) -> array().
+-spec merge(children(), children()) -> children().
 merge(#bp_tree_children{data = LTree}, #bp_tree_children{data = RTree} = Children) ->
     LList = gb_trees:to_list(LTree),
     RList = gb_trees:to_list(RTree),
@@ -398,7 +369,7 @@ merge(#bp_tree_children{data = LTree}, #bp_tree_children{data = RTree} = Childre
 %% Converts an array into a map.
 %% @end
 %%--------------------------------------------------------------------
--spec to_map(array()) -> #{key() => value()}.
+-spec to_map(children()) -> #{key() => value()}.
 to_map(#bp_tree_children{data = Tree, last_value = LV}) ->
     Map1 = maps:from_list(gb_trees:to_list(Tree)),
     case LV of
@@ -411,32 +382,20 @@ to_map(#bp_tree_children{data = Tree, last_value = LV}) ->
 %% Converts a map into an array.
 %% @end
 %%--------------------------------------------------------------------
--spec from_map(#{key() => value()}) -> array().
+-spec from_map(#{key() => value()}) -> children().
 from_map(Map) ->
     LV = maps:get(?LAST_KEY, Map, ?NIL),
     Map2 = maps:remove(?LAST_KEY, Map),
     Tree = gb_trees:from_orddict(lists:sort(maps:to_list(Map2))),
     #bp_tree_children{data = Tree, last_value = LV}.
 
-to_list(#bp_tree_children{data = Tree, last_value = LV}) ->
-    List1 = lists:foldl(fun({K, V}, Acc) ->
-        [K, V | Acc]
-    end, [], gb_trees:to_list(Tree)),
-    case LV of
-        ?NIL -> lists:reverse(List1);
-        _ -> lists:reverse([LV | List1])
-    end.
-
-from_list(List) ->
-    {List2, LV} = lists:foldl(fun
-        (Element, {Acc, ?NIL}) ->
-            {Acc, Element};
-        (Key, {Acc, Value}) ->
-            {[{Key, Value} | Acc], ?NIL}
-    end, {[], ?NIL}, List),
-    Tree = gb_trees:from_orddict(lists:reverse(List2)),
-    #bp_tree_children{data = Tree, last_value = LV}.
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Folds children.
+%% @end
+%%--------------------------------------------------------------------
+-spec fold(bp_tree:fold_start_spec(), children(),
+    bp_tree:fold_fun(), bp_tree:fold_acc()) -> bp_tree:fold_acc().
 fold({key, Key}, #bp_tree_children{data = Tree}, Fun, Acc) ->
     It = gb_trees:iterator_from(Key, Tree),
     fold_helper(It, Fun, Acc);
@@ -452,6 +411,53 @@ fold(all, #bp_tree_children{data = Tree}, Fun, Acc) ->
     It = gb_trees:iterator(Tree),
     fold_helper(It, Fun, Acc).
 
+%%====================================================================
+%% Functions for eunit tests
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts an array into a list.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_list(children()) -> list().
+to_list(#bp_tree_children{data = Tree, last_value = LV}) ->
+    List1 = lists:foldl(fun({K, V}, Acc) ->
+        [K, V | Acc]
+    end, [], gb_trees:to_list(Tree)),
+    case LV of
+        ?NIL -> lists:reverse(List1);
+        _ -> lists:reverse([LV | List1])
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts a list into an array.
+%% @end
+%%--------------------------------------------------------------------
+-spec from_list(list()) -> children().
+from_list(List) ->
+    {List2, LV} = lists:foldl(fun
+        (Element, {Acc, ?NIL}) ->
+            {Acc, Element};
+        (Key, {Acc, Value}) ->
+            {[{Key, Value} | Acc], ?NIL}
+    end, {[], ?NIL}, List),
+    Tree = gb_trees:from_orddict(lists:reverse(List2)),
+    #bp_tree_children{data = Tree, last_value = LV}.
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Folds children using iterator.
+%% @end
+%%--------------------------------------------------------------------
+-spec fold_helper(gb_trees:iter(),
+    bp_tree:fold_fun(), bp_tree:fold_acc()) -> bp_tree:fold_acc().
 fold_helper(It, Fun, Acc) ->
     case gb_trees:next(It) of
         {Key, Value, It2} ->
@@ -459,4 +465,74 @@ fold_helper(It, Fun, Acc) ->
             fold_helper(It2, Fun, Acc2);
         _ ->
             Acc
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns position of a key or fails with a missing error.
+%% @end
+%%--------------------------------------------------------------------
+-spec find(key(), gb_trees:iter(), pos_integer()) ->
+    {ok, pos_integer()} | {error, not_found}.
+find(Key, It, Pos) ->
+    case gb_trees:next(It) of
+        none ->
+            {error, not_found};
+        {Key2, _Value, It2} ->
+            case {Key2 =:= Key, Key2 < Key} of
+                {true, _} -> {ok, Pos};
+                {_, true} -> find(Key, It2, Pos + 1);
+                _ -> {error, not_found}
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns a position of a first key that does not compare less
+%% than a key.
+%% @end
+%%--------------------------------------------------------------------
+-spec lower_bound(key(), gb_trees:tree(), pos_integer()) -> pos_integer().
+lower_bound(Key, Tree, Pos) ->
+    case gb_trees:is_empty(Tree) of
+        true ->
+            Pos;
+        _ ->
+            {Key2, _Value, Tree2} = gb_trees:take_smallest(Tree),
+            case Key2 >= Key of
+                true -> Pos;
+                _ -> lower_bound(Key, Tree2, Pos + 1)
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns {Key, Value, Iterator} for position.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_pos(pos_integer(), gb_trees:tree()) ->
+    {key(), value(), gb_trees:iter()} | {error, out_of_range}.
+get_pos(Pos, Tree) ->
+    get_pos(gb_trees:iterator(Tree), Pos, 0, {error, out_of_range}).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns {Key, Value, Iterator} for position.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_pos(gb_trees:iter(), pos_integer(), non_neg_integer(),
+    {key(), value(), gb_trees:iter()} | {error, out_of_range}) ->
+    {key(), value(), gb_trees:iter()} | {error, out_of_range}.
+get_pos(_It, Pos, CurrentPos, Ans) when CurrentPos >= Pos ->
+    Ans;
+get_pos(It, Pos, CurrentPos, _TmpAns) ->
+    case gb_trees:next(It) of
+        none ->
+            {error, out_of_range};
+        {_Key, _Value, It2} = Ans ->
+            get_pos(It2, Pos, CurrentPos + 1, Ans)
     end.
