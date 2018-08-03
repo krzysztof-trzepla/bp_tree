@@ -21,7 +21,7 @@
 %% API exports
 -export([new/1, size/1]).
 -export([get/2, update/3, remove/2, remove/3]).
--export([find/2, lower_bound/2]).
+-export([find/2, find_value/2, lower_bound/2]).
 -export([insert/3, append/3, prepend/3, split/1, merge/2]).
 -export([to_list/1, from_list/1, to_map/1, from_map/1]).
 
@@ -32,7 +32,7 @@
 
 -type key() :: any().
 -type value() :: any().
--type selector() :: key | left | right | both.
+-type selector() :: key | left | right | both | lower_bound | lower_bound_key.
 -type pos() :: non_neg_integer() | first | last.
 -type remove_pred() :: fun((value()) -> boolean()).
 -opaque array() :: #bp_tree_array{}.
@@ -52,7 +52,7 @@
 new(Size) ->
     #bp_tree_array{
         size = 0,
-        data = list_to_tuple(lists:duplicate(2 * Size + 1, ?NIL))
+        data = erlang:make_tuple(2 * Size + 1, ?NIL)
     }.
 
 %%--------------------------------------------------------------------
@@ -71,6 +71,12 @@ size(#bp_tree_array{size = Size}) ->
 %%--------------------------------------------------------------------
 -spec get({selector(), pos()}, array()) ->
     {ok, value() | {value(), value()}} | {error, out_of_range}.
+get({lower_bound, Key}, Array) ->
+    Pos = lower_bound(Key, Array),
+    get({left, Pos}, Array);
+get({lower_bound_key, Key}, Array) ->
+    Pos = lower_bound(Key, Array),
+    get({key, Pos}, Array);
 get({Selector, first}, Array = #bp_tree_array{}) ->
     get({Selector, 1}, Array);
 get({Selector, last}, Array = #bp_tree_array{size = Size}) ->
@@ -131,6 +137,18 @@ find(Key, Array = #bp_tree_array{}) ->
         {ok, Key} -> {ok, Pos};
         {ok, _} -> {error, not_found};
         {error, out_of_range} -> {error, not_found}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns value for a key in an array or fails with a missing error.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_value(key(), array()) -> {ok, value()} | {error, not_found}.
+find_value(Key, Array = #bp_tree_array{}) ->
+    case find(Key, Array) of
+        {ok, Pos} -> get({left, Pos}, Array);
+        {error, Reason} -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -222,7 +240,7 @@ remove({Selector, Key}, Pred, Array = #bp_tree_array{}) ->
             case Pred(Value) of
                 true when Selector =:= left -> {ok, shift_left(Pos, 0, Array)};
                 true when Selector =:= right -> {ok, shift_left(Pos, 1, Array)};
-                false -> {error, predicate_not_satified}
+                false -> {error, predicate_not_satisfied}
             end;
         {error, Reason} ->
             {error, Reason}
@@ -239,7 +257,7 @@ split(Array = #bp_tree_array{size = Size, data = Data}) ->
     Begin = 2 * Pivot,
     SplitKey = element(Begin, Data),
     LData = setelement(Begin, Data, ?NIL),
-    RData = list_to_tuple(lists:duplicate(erlang:size(Data), ?NIL)),
+    RData = erlang:make_tuple(erlang:size(Data), ?NIL),
     {LData3, RData3} = lists:foldl(fun(Pos, {LData2, RData2}) ->
         {
             setelement(Begin + Pos, LData2, ?NIL),
